@@ -1,0 +1,273 @@
+{
+  "meta": {
+    "date": "2026-10-09T08:46:51.114Z",
+    "node": "v26.8.1",
+    "method": "offline static scan of built dist (no browser, no runtime) — lynx bundle = shipped artifact; web bundle = dev/docs-preview cost"
+  },
+  "rows": [
+    {
+      "example": "7guis",
+      "entry": "cells.web.bundle",
+      "webRaw": 100512,
+      "webGzip": 34677,
+      "lynxRaw": 103116,
+      "lynxGzip": 40824
+    },
+    {
+      "example": "7guis",
+      "entry": "circle-drawer.web.bundle",
+      "webRaw": 83632,
+      "webGzip": 29214,
+      "lynxRaw": 85751,
+      "lynxGzip": 35013
+    },
+    {
+      "example": "7guis",
+      "entry": "counter.web.bundle",
+      "webRaw": 71364,
+      "webGzip": 25939,
+      "lynxRaw": 74478,
+      "lynxGzip": 31694
+    },
+    {
+      "example": "7guis",
+      "entry": "crud.web.bundle",
+      "webRaw": 80178,
+      "webGzip": 28245,
+      "lynxRaw": 82700,
+      "lynxGzip": 33906
+    },
+    {
+      "example": "7guis",
+      "entry": "flight-booker.web.bundle",
+      "webRaw": 74883,
+      "webGzip": 26887,
+      "lynxRaw": 77721,
+      "lynxGzip": 32469
+    },
+    {
+      "example": "7guis",
+      "entry": "temperature-converter.web.bundle",
+      "webRaw": 71503,
+      "webGzip": 25846,
+      "lynxRaw": 74541,
+      "lynxGzip": 31645
+    },
+    {
+      "example": "7guis",
+      "entry": "timer.web.bundle",
+      "webRaw": 74543,
+      "webGzip": 26588,
+      "lynxRaw": 77313,
+      "lynxGzip": 32307
+    },
+    {
+      "example": "bench-table-react",
+      "entry": "main.web.bundle",
+      "webRaw": 94750,
+      "webGzip": 32178,
+      "lynxRaw": 96071,
+      "lynxGzip": 40334
+    },
+    {
+      "example": "bench-table",
+      "entry": "main.web.bundle",
+      "webRaw": 104379,
+      "webGzip": 36000,
+      "lynxRaw": 106647,
+      "lynxGzip": 41896
+    },
+    {
+      "example": "counter",
+      "entry": "counter.web.bundle",
+      "webRaw": 71483,
+      "webGzip": 25971,
+      "lynxRaw": 74570,
+      "lynxGzip": 31715
+    },
+    {
+      "example": "device-lab",
+      "entry": "selftest.web.bundle",
+      "webRaw": 84095,
+      "webGzip": 30160,
+      "lynxRaw": 86301,
+      "lynxGzip": 35481
+    },
+    {
+      "example": "elk",
+      "entry": "elk.web.bundle",
+      "webRaw": 472119,
+      "webGzip": 136108,
+      "lynxRaw": 440522,
+      "lynxGzip": 138170
+    },
+    {
+      "example": "hackernews",
+      "entry": "hackernews.web.bundle",
+      "webRaw": 222648,
+      "webGzip": 74868,
+      "lynxRaw": 219025,
+      "lynxGzip": 80424
+    },
+    {
+      "example": "main-thread-draggable",
+      "entry": "main-thread-draggable.web.bundle",
+      "webRaw": 74503,
+      "webGzip": 26660,
+      "lynxRaw": 77386,
+      "lynxGzip": 32310
+    },
+    {
+      "example": "mini-pure",
+      "entry": "mini.web.bundle",
+      "webRaw": 26037,
+      "webGzip": 9376,
+      "lynxRaw": 28415,
+      "lynxGzip": 15079
+    },
+    {
+      "example": "motion",
+      "entry": "basic.web.bundle",
+      "webRaw": 171176,
+      "webGzip": 56772,
+      "lynxRaw": 190923,
+      "lynxGzip": 83971
+    },
+    {
+      "example": "motion",
+      "entry": "gesture.web.bundle",
+      "webRaw": 160347,
+      "webGzip": 54992,
+      "lynxRaw": 183013,
+      "lynxGzip": 81672
+    },
+    {
+      "example": "motion",
+      "entry": "motion-value.web.bundle",
+      "webRaw": 166872,
+      "webGzip": 55311,
+      "lynxRaw": 185024,
+      "lynxGzip": 81026
+    },
+    {
+      "example": "motion",
+      "entry": "spring.web.bundle",
+      "webRaw": 171347,
+      "webGzip": 56817,
+      "lynxRaw": 191086,
+      "lynxGzip": 83997
+    },
+    {
+      "example": "networking",
+      "entry": "networking.web.bundle",
+      "webRaw": 82689,
+      "webGzip": 29368,
+      "lynxRaw": 85603,
+      "lynxGzip": 35030
+    },
+    {
+      "example": "scrolling",
+      "entry": "ListBasic.web.bundle",
+      "webRaw": 83340,
+      "webGzip": 29206,
+      "lynxRaw": 83058,
+      "lynxGzip": 33878
+    },
+    {
+      "example": "scrolling",
+      "entry": "ListFilter.web.bundle",
+      "webRaw": 85265,
+      "webGzip": 29727,
+      "lynxRaw": 85061,
+      "lynxGzip": 34477
+    },
+    {
+      "example": "scrolling",
+      "entry": "ListInfinite.web.bundle",
+      "webRaw": 85412,
+      "webGzip": 29900,
+      "lynxRaw": 85144,
+      "lynxGzip": 34653
+    },
+    {
+      "example": "scrolling",
+      "entry": "ListPrepend.web.bundle",
+      "webRaw": 86875,
+      "webGzip": 30102,
+      "lynxRaw": 86604,
+      "lynxGzip": 34916
+    },
+    {
+      "example": "scrolling",
+      "entry": "ListRemove.web.bundle",
+      "webRaw": 85964,
+      "webGzip": 29856,
+      "lynxRaw": 85717,
+      "lynxGzip": 34640
+    },
+    {
+      "example": "scrolling",
+      "entry": "ListReorder.web.bundle",
+      "webRaw": 87550,
+      "webGzip": 30053,
+      "lynxRaw": 87036,
+      "lynxGzip": 34861
+    },
+    {
+      "example": "scrolling",
+      "entry": "ListWaterfall.web.bundle",
+      "webRaw": 83648,
+      "webGzip": 29327,
+      "lynxRaw": 83408,
+      "lynxGzip": 33994
+    },
+    {
+      "example": "scrolling",
+      "entry": "ScrollViewBasic.web.bundle",
+      "webRaw": 82560,
+      "webGzip": 28993,
+      "lynxRaw": 82364,
+      "lynxGzip": 33726
+    },
+    {
+      "example": "style-demo",
+      "entry": "style.web.bundle",
+      "webRaw": 78727,
+      "webGzip": 27977,
+      "lynxRaw": 80610,
+      "lynxGzip": 33182
+    },
+    {
+      "example": "tailwind",
+      "entry": "tailwind.web.bundle",
+      "webRaw": 100374,
+      "webGzip": 32178,
+      "lynxRaw": 96125,
+      "lynxGzip": 36727
+    },
+    {
+      "example": "todomvc",
+      "entry": "todomvc.web.bundle",
+      "webRaw": 90733,
+      "webGzip": 31379,
+      "lynxRaw": 88869,
+      "lynxGzip": 35691
+    },
+    {
+      "example": "touch-fx",
+      "entry": "main.web.bundle",
+      "webRaw": 89362,
+      "webGzip": 31546,
+      "lynxRaw": 89790,
+      "lynxGzip": 37316
+    }
+  ],
+  "lynxOnly": [
+    {
+      "example": "raw-lynx",
+      "entry": "raw.lynx.bundle",
+      "raw": 15143,
+      "gzip": 8001
+    }
+  ]
+}

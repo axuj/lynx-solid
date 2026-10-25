@@ -1,0 +1,113 @@
+# API Overview
+
+The public surface of `@lynx-solid/runtime` (background entry) plus the rsbuild plugin — mount, page root, and cross-thread bridges. Reactivity is imported from `solid-js` directly; see the `CHEATSHEET.md` shipped inside the `solid-js` package for the full reactivity API.
+
+## Rendering
+
+### `render(root): () => void`
+
+Mounts a component tree under the Lynx page root (the one node both threads agree on) and runs it to completion of the current reactive flush. Returns a disposer that unmounts everything.
+
+```tsx
+import { render } from '@lynx-solid/runtime'
+
+const dispose = render(() => <App />)
+```
+
+### `createPageRoot()`
+
+Creates the page-root ShadowElement (id `1`). You rarely need it — `render` creates it internally — but it is public for hosts that manage the root themselves.
+
+## Main Thread Refs
+
+### `useMainThreadRef<T>(initValue: T): MainThreadRef<T>`
+
+Creates a cross-thread value binding. On the background thread `.current` is the initial placeholder; attach it with `main-thread:ref` and the main thread resolves it to the live element (or holds worklet-side state). See [Main Thread Script](/guide/main-thread-script).
+
+```tsx
+const boxRef = useMainThreadRef<{ setStyleProperty: (k: string, v: string) => void } | null>(null)
+<view main-thread:ref={boxRef} … />
+```
+
+### `class MainThreadRef<T>`
+
+The binding itself: a worklet value id (`_wvid`, shipped to the main thread via ops) plus `.current`. Serializes to `{ _wvid }` across the thread boundary.
+
+## Cross-Thread Calls
+
+### `runOnMainThread(worklet)(...args): Promise<R>`
+
+Calls a `'main thread'` worklet from the background thread and resolves with its return value. The argument must be the worklet function itself — a plain function reaching runtime means the module skipped the worklet transform and throws loudly instead of hanging.
+
+```tsx
+function readMtClock(unit: string) {
+  'main thread'
+  return `pong-from-mt:${unit}`
+}
+
+const readClock = runOnMainThread(readMtClock)
+readClock('ms').then(v => console.log(v))
+```
+
+### `runOnBackground(handle)(...args): Promise<R>`
+
+Calls a background function from inside a `'main thread'` worklet. Exists only as a typed stub on the background side — the compiler rewrites every call site against the main-thread global. Pass a handle from `registerBgFunction`, not a raw closure.
+
+```tsx
+const saveRef = registerBgFunction((id: unknown) => save(id))
+
+function onTap() {
+  'main thread'
+  runOnBackground(saveRef)(currentId)
+}
+```
+
+### `registerBgFunction(fn): BgFnHandle`
+
+Registers a background function so worklets can call it. Keeps the live `_fn` on the background side (it never crosses the thread — serialization drops it); dispatches resolve `(execId, fnId)` back to it.
+
+### `transformToWorklet(fn): BgFnHandle`
+
+Builds the same handle shape for SWC-generated `_jsFn` maps. Handles pass through untouched (no double-wrapping); non-function input yields an `{ _jsFnId, _error }` descriptor surfaced at call time.
+
+## Template Helpers
+
+### `ref`
+
+The `ref` callback seam for background elements, re-exported from the template module for compiled code and advanced use.
+
+## Plugin
+
+### `pluginSolidLynx(options?): RsbuildPlugin`
+
+the rsbuild plugin. Splits each entry into a background entry (Solid runtime + user code, auto-prepended with the bootstrap that wires the bridge) and a main-thread entry (PAPI bootstrap + worklet runtime + virtual skeleton modules), using bundler layers so both bundles stay separate.
+
+```ts
+import { pluginSolidLynx } from '@lynx-solid/plugin'
+
+export default defineConfig({
+  // …
+  plugins: [
+    pluginSolidLynx({
+      // Inject enableCSSInlineVariables into the encoded template so
+      // class-driven CSS var overrides re-cascade on device.
+      enableCSSInlineVariables: true,
+      // Inject enableCSSInheritance so normal inheritable properties
+      // (font-size, color, …) cascade parent → child; custom properties
+      // inherit regardless of this flag.
+      enableCSSInheritance: true,
+      // Bare-import packages whose 'main thread' worklets must be
+      // followed into node_modules (same semantics as
+      // same semantics as vue-lynx's `includeWorkletPackages`:
+      // https://github.com/Huxpro/vue-lynx).
+      includeWorkletPackages: [],
+    }),
+  ],
+})
+```
+
+Lynx bundles must stay single-file — keep `performance.chunkSplit: 'all-in-one'` (the plugin warns on anything else), with `splitChunks: false` / `runtimeChunk: false`.
+
+## JSX Intrinsics
+
+`view`, `text`, `image`, `scroll-view`, `list`, `list-item`, `input`, `textarea`, `page` (plus `svg` / `raw-text` escapes), with props from `@lynx-js/types` and the `main-thread:` worklet namespace. See [TypeScript](/guide/typescript) and [Solid Compatibility](/guide/solid-compatibility).

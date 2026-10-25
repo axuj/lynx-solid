@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    // No "paths" override and no composite: cross-package imports resolve
+    // through the project reference below — tsc redirects them to the
+    // referenced composite project's declaration outputs
+    // (compiler dist/*.d.ts) instead of pulling sibling src trees under
+    // rootDir (TS6059). This config is only ever read as a program (rslib
+    // dts); it is never `tsc -b`-built, so it emits nothing itself.
+    // Dev resolution still walks src via base.json paths.
+    "allowImportingTsExtensions": false,
+    "declaration": true,
+    "declarationMap": false,
+    // Countermands dev's noEmit:true (build extends dev) — a missing line
+    // here silently disables emit for the whole program (TS6310 downstream).
+    "noEmit": false,
+    // tsc emits even when typechecking fails by default; without this a
+    // failed dts prep litters src/ with in-place .d.ts.
+    "noEmitOnError": true
+  },
+  "references": [{ "path": "../compiler/tsconfig.build.json" }],
+  "include": ["src"]
+}

@@ -1,0 +1,59 @@
+name: Deploy docs
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# `pages: write` + `id-token: write` are what let `deploy-pages` mint its OIDC
+# token and publish; contents stays read-only because this workflow never writes
+# back to the repo.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One Pages build/deploy at a time, and never cancel an in-flight deploy — a
+# cancelled upload can leave the live site on a torn artifact.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Must precede setup-nub: it resolves the Node pin and the lockfile from
+      # the checkout.
+      - uses: actions/checkout@v4
+
+      # Drop-in for actions/setup-node. Installs nub and provisions the Node
+      # this repo pins (`engines.node: 26.x`) onto PATH.
+      - uses: nubjs/setup-nub@v0
+
+      - run: nub install --frozen-lockfile
+
+      # Project Pages serves the site from /<repo>/, so rspress has to root every
+      # asset and link there. Derived from the repository instead of hardcoded,
+      # so renaming the repo does not silently break the deployed site.
+      - name: Resolve docs base
+        run: echo "DOCS_BASE=/${GITHUB_REPOSITORY#*/}/" >> "$GITHUB_ENV"
+
+      # `build` runs prepare-examples first: the docs embed the examples' real
+      # bundles, so a stale or missing dist/ would ship broken previews.
+      - run: nub run -F @lynx-solid/website build
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/doc_build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,222 @@
+# 数据请求
+
+Lynx 提供了 [Fetch API](https://lynxjs.org/next/api/lynx-api/global/fetch) 用于发起网络请求。Solid 2 的异步模型是：
+**任何返回 Promise 的 computation 就是一个异步数据源**，未就绪时由 `<Loading>` 接管，错误交给 `<Errored>`；
+`createResource` 在 2.0 已经移除，你也不需要自己写 loading / error 三元组。
+
+这已经够“取回来就渲染”了。如果还想要**缓存**（去重、stale-while-revalidate、分页），就用查询库：
+`@tanstack/solid-query` v6 是 TanStack Query 的 Solid 2 移植版，本页 `<Go>` 里的 networking 示例用的就是它。
+
+另请参阅：[Lynx — Networking](https://lynxjs.org/next/guide/interaction/networking.html)
+
+<Go example="networking" defaultFile="src/index.tsx" />
+
+## 异步 computation + `<Loading>`
+
+```tsx title="src/index.tsx"
+import { createMemo, Errored, For, Loading } from 'solid-js'
+
+const users = createMemo(async () => {
+  const res = await fetch('https://jsonplaceholder.typicode.com/users')
+  if (!res.ok)
+    throw new Error('Failed to fetch users')
+  return (await res.json()) as User[]
+})
+```
+
+就绪之前读 `users()` 会挂起，所以读取它的地方要包在 `<Loading>` 里：
+
+```tsx
+<Errored fallback={(err, reset) => <text bindtap={reset}>失败：{String(err())}，点此重试</text>}>
+  <Loading fallback={<text>Loading users...</text>}>
+    <For each={users()}>
+      {user => <UserCard user={user} />}
+    </For>
+  </Loading>
+</Errored>
+```
+
+`<Loading>` 替代 1.x 的 `<Suspense>`，`<Errored>` 替代 `<ErrorBoundary>`（`reset` 用来重试）。多个 `Loading` 想一起
+reveal 时用 `<Reveal>`。
+
+## 依赖切换
+
+依赖直接写在 compute 里——读它就是追踪，不需要 `createEffect`、也不需要手动清空旧数据：
+
+```tsx
+const posts = createMemo(async () => {
+  const id = selectedUserId()
+  if (id === null)
+    return [] as Post[]
+  const res = await fetch(`https://jsonplaceholder.typicode.com/users/${id}/posts`)
+  return (await res.json()) as Post[]
+})
+```
+
+选中项一变，compute 重跑、`<Loading>` 自动回到 fallback。想区分「首次加载」和「正在换一个新值时」，
+在 `Loading` 边界里读 `isPending(() => posts())`；想看切换过程中的旧值用 `latest(id)`。
+
+## 查询缓存：`@tanstack/solid-query`
+
+v6 是按 Solid 2 写的（peer 是 `solid-js >=2.0.0-rc.6`），它的 `data` 读本身就是一个会挂起的读，所以照样能接
+`<Loading>` / `<Errored>`。区别在**缓存**：query cache 才是源，变更写进缓存。
+
+```tsx title="src/index.tsx"
+import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/solid-query'
+import { createOptimistic } from 'solid-js'
+
+const client = new QueryClient()
+
+function App() {
+  const queryClient = useQueryClient()
+
+  const users = useQuery(() => ({
+    queryKey: ['users'],
+    queryFn: async (): Promise<User[]> => (await fetch('https://jsonplaceholder.typicode.com/users')).json(),
+  }))
+
+  const posts = useQuery(() => ({
+    queryKey: ['posts', selectedUserId()],
+    enabled: selectedUserId() !== null,
+    queryFn: async (): Promise<Post[]> => (await fetch(`…/users/${selectedUserId()}/posts`)).json(),
+  }))
+
+  // 乐观层：createOptimistic 覆盖，在 mutation 里写。mutation 跑在一个 action
+  // transaction 里，所以覆盖立即可见、settle 时被丢弃——失败时**这就是回滚**。
+  // 不用快照、也不用 context：v6 不给回调传 context。
+  const [pendingRemoval, setPendingRemoval] = createOptimistic<number[]>([])
+
+  const deletePost = useMutation(() => ({
+    mutationFn: async (postId: number) => {
+      const res = await fetch(`…/posts/${postId}`, { method: 'DELETE' })
+      if (!res.ok)
+        throw new Error('Failed to delete post')
+      return postId
+    },
+    onMutate: (postId: number) => {
+      setPendingRemoval(prev => [...prev, postId]) // 瞬时
+    },
+    onSuccess: (_result, postId) => {
+      // 持久：jsonplaceholder 不会持久化 DELETE，所以这里改缓存。真后端会
+      // invalidate + refetch，答案里就带着"这行没了"。
+      queryClient.setQueryData<Post[]>(['posts', selectedUserId()], old => old?.filter(p => p.id !== postId) ?? [])
+    },
+  }))
+
+  // 列表 = 缓存 ⊕ 乐观覆盖
+  const visiblePosts = createMemo(() => {
+    const list = posts.data
+    const pending = pendingRemoval()
+    return pending.length === 0 ? list : list.filter(p => !pending.includes(p.id))
+  }, { lazy: true })
+}
+```
+
+选项是**访问器**形式：换掉 `queryKey` 就是换了一个 query，所以依赖切换不需要 effect，也不用手动清空旧列表。
+
+**这不是 v5（React/Vue）那套乐观写法。** 那边是：mutation 先把乐观值写进缓存、存一份快照、`onError` 里恢复快照。v6 是
+按 Solid 2 的原语重写的：一次 mutation 就是一个 `action` transaction，库自己的 flight 状态**就是**一个
+`createOptimistic` 覆盖，`onMutate` 里写的调用方覆盖遵循同样的规则——立刻可见、settle 时丢弃。于是分工是：
+
+- **瞬时**：`createOptimistic` 覆盖（失败时由引擎回滚）；
+- **持久**：请求成功后写缓存（真后端会回答"这行没了"，那时缓存是被 refetch 更新的）。
+
+真机实测：点 ✕ 行立刻消失、请求成功后不再回来；把请求打到 404，过一会儿行自己回来了。
+
+代价：这个库不小。在 networking 示例里它给包体加了 **+107 KB**（110 KB → 217 KB）。只在真的需要缓存时才付这个钱。
+该示例走的是**默认路径**——查询库当不了主线程首屏（见下面的 IFR 一节）。
+
+## 这个库对宿主有什么要求
+
+TanStack Query 是按浏览器写的，Lynx 不是。一个缺口，在示例的 `src/polyfills.ts` 里补：
+
+- **`window`**——这个库用 `typeof window === 'undefined'` 判断环境。BG 上这个名字是 wrapper 参数（真机上是
+  undefined），于是库走了 **SSR 那条路**：它根本不订阅缓存，乐观写入的 `setQueryData` 也就永远到不了界面
+  （真机实测：缓存里已是 9 条，界面还画着 10 条）。要既装 `globalThis.window`、又同步 wrapper 作用域的绑定——
+  bundle 代码里的裸 `window` 解析到的是那个参数，不是 `globalThis`。
+
+  **import 顺序有讲究。** 库是在**模块顶层**读 `typeof window` 的，所以 polyfill 必须先于它求值：`import './polyfills'`
+  写在前面、库写在后面——import 顺序＝求值顺序。
+
+  ```tsx title="src/index.tsx"
+  import { render } from '@lynx-solid/runtime'
+  // 必须先于 query 库求值：库在模块顶层读 `typeof window`，而 BG 上的 `window`
+  // 在 polyfill 重新绑定之前是 undefined。
+  import './polyfills'
+  import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/solid-query'
+  ```
+
+`AbortController` / `AbortSignal` 不用管：BG 原生就有。主线程没有——见下面。
+
+## 首屏与 IFR 的约束
+
+打开 [`enableMtIfr`](/zh/guide/mt-ifr) 时，首屏在**主线程**上求值，用的是 solid-js 的 **server 构建**，而主线程没有
+`fetch`（运行时故意不补，理由见[线程契约](/zh/guide/mt-ifr#首屏代码的线程契约)）。
+
+**查询库可以在主线程求值，但绝不能在主线程取数。** 挡住它的不是"读"，是**环境探测**：`useQuery` 是 hook，query 对象在
+MT 上照样被创建——但 query-core 用 `typeof window === 'undefined'` 判断自己是不是在服务端
+（`query-core/utils.js:3`）。主线程**故意没有 `window`**（runtime 不装任何浏览器形状的全局，缺口由应用自己的 polyfill 补，见 [MT-IFR](/zh/guide/mt-ifr)），所以 observer
+不会订阅、请求不会发出。在 MT 上伪造 `window` 会把这个探测翻成"浏览器"：observer 在首屏渲染时就挂上、尝试 fetch，
+然后死在缺失的 `AbortController` 上（query-core 每建一个 Query 实例就 `new` 一个，`query.js:211`），rejection 被吞掉
+——`networking` 示例真机实测。
+
+读**留在 `<Loading>` 边界里**仍然是画出壳的方式：MT 上边界显示 fallback，数据来自后台线程——那边由示例自己的
+`polyfills.ts`（用 `__MAIN_THREAD__` 宏只在 BG 生效）装 `window`，query 在 BG 上才是活的。
+
+同一条规则适用于任何"浏览器形状"的库：**给接缝，别给假全局**。router 示例给 `createRouter` 传 `origin`，所以
+`RouterCore` 在主线程上根本不会读 `window?.origin`（`router-core/router.js:121-122`）。
+
+所以想要主线程首屏的应用：内容本身必须在首屏出现时用**原生异步模型**；能接受先出一个壳时，查询库也能上 IFR。
+原生模型下，MT 不能*创建*那个 computation——`ssrSource: 'client'` 就是干这个的，再给 `loadingValue` 作为它画出来的种子：
+
+```tsx
+const posts = createMemo(
+  async () => fetchPosts(selectedUserId()),
+  { ssrSource: 'client', loadingValue: [] },
+)
+```
+
+裸 `ssrSource: 'client'` 在渲染期被读会直接抛错（它标记的是“客户端才有”的洞），所以要么别在首屏读，要么给
+`loadingValue`。
+
+同样的规则对手写 computation 也成立：
+
+1. **任何 computation 都在创建时执行** —— `createMemo(async () => …)` 在 `createMemo` 返回前就已经发起了请求，读不读
+   都一样。
+2. **没有 SSR context 时 `<Loading>` 只渲染一次 fallback**，promise 落地后**不会重渲染**，所以首屏的异步数据在 MT 上
+   永远不会出现。
+
+## 不用查询库时的乐观更新
+
+`createOptimistic` 就是 Solid 2 自己的乐观层：`action` 里的写入立即显示，请求抛错时自己回滚。
+
+```tsx
+const [pendingRemoval, setPendingRemoval] = createOptimistic<number[]>([])
+
+const deletePost = action(function* (postId: number) {
+  setPendingRemoval(prev => [...prev, postId]) // 乐观写入
+  const res = yield fetch(`…/posts/${postId}`, { method: 'DELETE' })
+  if (!res.ok)
+    throw new Error('Failed to delete post')
+})
+```
+
+写进哪里很关键：乐观层只活一个 transition，settle 之后列表按源重新推导。源还返回这一行，行就会回来——真后端返回
+“没了”，mock API 不会，所以要把这次删除也记在源里（比如一个 id 列表，源按它过滤），再用 `refresh(source)` 重新推导。
+
+整个集合也可以用 `createOptimisticStore(fn, seed)`（投影，回滚规则相同）。它会把 Solid 的 store/对账实现拉进包体
+（本示例 +43.8 KB），所以只有真的需要 store 时再用。
+
+- 服务器也会改的字段：用 `affects(post, 'updatedAt')` 标成 pending。
+- 「保存中…」这类过程提示是一个共同写入的 `createOptimistic(false)` 标志，不是 `isPending`（`refresh()` 是安静重问同一个
+  问题，不会自己变成 pending）。
+
+## 缓存与分页
+
+超出简单读取的需求——缓存、后台刷新、分页——见 HackerNews 的 `use-hn-query` helper（模块缓存带过期时间，并发请求
+去重）与 Elk 的 masto.js 分页器（`pages()` + `<Loading>`）。
+
+## 案例
+
+- [HackerNews](/zh/guide/hackernews)——feed 与帖子串请求，路由级 loading 态
+- [Elk](/zh/guide/elk)——masto.js 时间线、分页与设置持久化

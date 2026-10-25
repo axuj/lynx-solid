@@ -1,0 +1,165 @@
+# What is Lynx Solid?
+
+**Lynx Solid** is a Solid 2 custom renderer for [Lynx](https://lynxjs.org), enabling you to build native Lynx applications using Solid's familiar fine-grained reactivity, function components, and JSX.
+
+If you know Solid 2 and are familiar with Lynx, you already know how to use Lynx Solid.
+
+## Main Features
+
+- **Familiar Solid 2 API** — Use `createSignal()`, `createMemo()`, `createEffect()`, `<For>`, `<Show>`, and everything you love about Solid. Reactivity comes from `solid-js` directly — same package, same API as on the web.
+- **Cross-Platform Native Rendering** — Lynx provides a high-performance native rendering engine on mobile and desktop, as well as first-class Web rendering.
+- **Dual-Thread Architecture** — Solid runs on the background thread; the main thread handles native rendering. This separation keeps your app responsive. For latency-sensitive interactions (drag, scroll), [Main Thread Script](/guide/main-thread-script) lets you mark functions with `'main thread'` to run directly on the main thread with zero cross-thread delay.
+- **Static skeletons, dynamic holes** — A fork of dom-expressions' [`babel-plugin-jsx`](https://github.com/ryansolid/dom-expressions) (MIT) extracts static subtrees into main-thread skeletons at build time. One `INSTANTIATE` per template instance, zero ops for static subtrees.
+
+## For Solid Web Developers
+
+If you're coming from Solid on the web, most of what you know carries over. Here are the key differences.
+
+### Change your `import`
+
+Reactivity stays on `solid-js`; only the mount / bridge APIs come from `@lynx-solid/runtime`:
+
+```ts
+import { createSignal } from 'solid-js'
+import { render } from '@lynx-solid/runtime'
+```
+
+There is no DOM node to render into — `render()` mounts the component tree under the Lynx page root automatically (see [Solid Compatibility](/guide/solid-compatibility)).
+
+### Different elements
+
+Lynx provides native elements instead of HTML. Use `<view>`, `<text>`, `<image>`, etc. in place of `<div>`, `<span>`, `<img>`:
+
+```diff
+- <div class="card">
+-   <span>{{ message }}</span>
++ <view class="card">
++   <text>{message()}</text>
+  </view>
+```
+
+:::info
+Text content must be wrapped in `<text>` — Lynx does not support bare text nodes inside `<view>`.
+:::
+
+### Different events
+
+Lynx uses its own event system. Unlike the DOM, where an event is identified by its name alone, every Lynx event is registered with a **type** that controls propagation and threading: `bind` (propagates), `catch` (stops propagation), and `main-thread` variants (Main Thread Script handlers that run on the main thread). Lynx Solid keeps Lynx's own attribute naming for all of them, so any event from the Lynx docs works verbatim as an attribute binding:
+
+```tsx
+<view
+  bindtap={onTap}
+  catchtap={onTapAndStop}
+  main-thread:bindtap={onMainThreadTap}
+/>
+```
+
+There are intentionally no DOM-style `on*` aliases: a Lynx event is not a DOM event (different propagation and event object), so `onClick` would be misleading about the semantics.
+
+See the [Lynx event handling guide](https://lynxjs.org/guide/interaction/event-handling.html) for more details.
+
+### No `document` or `window`
+
+Lynx does not provide browser globals. Instead, Lynx provides its own [APIs](https://lynxjs.org/next/api/lynx-api/lynx) via the [`lynx`](https://lynxjs.org/next/api/lynx-api/lynx.html) global object:
+
+- [Global APIs](https://lynxjs.org/next/api/lynx-api/global.html) like `setTimeout()` and `console.log()` are available on both threads, same as the web.
+- DOM-like queries (e.g. `querySelector`, `getBoundingClientRect`) are available as [async background-thread APIs](https://lynxjs.org/next/api/lynx-api/nodes-ref.html) or [synchronous Main Thread APIs](https://lynxjs.org/next/api/lynx-api/main-thread.html) depending on which thread you need them on.
+- Platform-native capabilities are available via [NativeModules](https://lynxjs.org/guide/use-native-modules.html) and [Custom Elements](https://lynxjs.org/guide/custom-native-component.html).
+
+One PrimJS rule: host timers drop forwarded arguments, so callbacks that need parameters must be arrow-wrapped — `setTimeout(() => fn(a, b), 100)`, never `setTimeout(fn, 100, a, b)`.
+
+## Understanding the Dual-Thread Model
+
+You should expect your Solid code to just work on Lynx. The main thing that differs is the threading model. If you've worked with Web Workers, Lynx's architecture will feel familiar. Solid runs on a **background thread** while native rendering happens on the **main thread** — just like offloading work to a Web Worker so the UI thread stays responsive. The difference is that in Lynx, this is the _default_ — fine-grained updates never block the main thread.
+
+Under the hood, Lynx Solid builds a **ShadowElement** tree on the background thread. Changes are batched as **ops** and flushed to the main thread. User interactions flow back as **events**. This forms a cycle analogous to the browser event loop:
+
+```
+        ┌────────────────────────────────────────────────────────────┐
+        │                     Background Thread                      │
+        │  Solid runtime · signals · effects · your code             │
+        └──────────────┬──────────────────────▲──────────────────────┘
+                  ops  │                      │  events
+                       ▼                      │
+        ┌─────────────────────────────────────┴──────────────────────┐
+        │                        Main Thread                         │
+        │  Native elements · layout · rendering · Main Thread Script │
+        └────────────────────────────────────────────────────────────┘
+```
+
+Static subtrees never enter this cycle at update time: the compiler hoists them into skeleton templates the main thread instantiates in one shot.
+
+One full cycle — ops down, events back up — is one **tick**. Native elements materialize asynchronously on the main thread, so anything that touches them must wait at least a full cycle. This is the same mental model as waiting for mount on the web, just extended across threads.
+
+### What this means in practice
+
+In day-to-day development, the dual-thread model is largely transparent. There are only three things to keep in mind:
+
+#### Mounting is declarative — `render()` owns the page root
+
+There is exactly one root: the page both threads agree on. `render(() => <App />)` mounts under it and returns a disposer that unmounts everything. If you need to interact with native elements after mount, query them through `lynx.createSelectorQuery()` (async) — or synchronously from [Main Thread Script](/guide/main-thread-script).
+
+#### Lifecycle runs on the background thread — wait a tick for native elements
+
+Just like on the web, `onSettled` means "the component tree is built." The difference is that native elements are created asynchronously on the main thread. If you need to interact with native elements after mount, use the async query API, which resolves once the elements have materialized:
+
+```tsx
+import { onSettled } from 'solid-js'
+
+function App() {
+  onSettled(() => {
+    // Background tree is built; native elements arrive a tick later.
+    lynx.createSelectorQuery()
+      .select('.target')
+      .invoke({
+        method: 'boundingClientRect',
+        success: (res) => { console.log(res) },
+      })
+      .exec()
+  })
+
+  return <scroll-view class="target">…</scroll-view>
+}
+```
+
+If your `onSettled` only sets up reactive state, timers, or data fetching, no waiting is needed — those don't depend on native elements.
+
+#### Main Thread Script for zero-latency interactions (advanced)
+
+From the background thread, native element access is always asynchronous. For most use cases this is fine. When you need synchronous access — smooth animations, gesture handling, layout measurement — use [Main Thread Script](/guide/main-thread-script). Functions marked `'main thread'` run directly on the main thread and mutate live elements via `MainThreadRef`:
+
+```tsx
+import type { ScrollEvent } from '@lynx-js/types'
+import { render, useMainThreadRef } from '@lynx-solid/runtime'
+
+function App() {
+  const boxRef = useMainThreadRef<{ setStyleProperty: (k: string, v: string) => void } | null>(null)
+
+  const onScroll = (event: ScrollEvent) => {
+    'main thread'
+    boxRef.current?.setStyleProperty('transform', `translateY(${-event.detail.scrollTop}px)`)
+  }
+
+  return (
+    <view>
+      <scroll-view main-thread:bindscroll={onScroll} scroll-y>…</scroll-view>
+      <view main-thread:ref={boxRef} />
+    </view>
+  )
+}
+```
+
+See [Solid Compatibility](/guide/solid-compatibility) for feature-specific caveats.
+
+### Under the hood: the ops protocol
+
+Every background mutation becomes a numeric op (create element, set attribute, append, …) flushed in one batch. This protocol-level probe hand-writes the same ops a compiled app would emit — browse it source-only:
+
+<Go example="mini-pure" defaultFile="src/index.ts" mode="source" />
+
+## Next Steps
+
+- [Solid Compatibility](/guide/solid-compatibility) — Feature-by-feature breakdown of what works and what differs
+- [Main Thread Script](/guide/main-thread-script) — Run performance-critical logic on the main thread
+- [Tutorial: Counter](/guide/tutorial-counter) — Build your first interactive page
+- [Sources & Attribution](/guide/sources) — Where the ported and vendored code in this project comes from

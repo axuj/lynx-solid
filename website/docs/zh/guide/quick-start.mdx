@@ -1,0 +1,194 @@
+import { PackageManagerTabs, Steps } from '@theme'
+
+# 快速开始
+
+欢迎使用 Lynx Solid！我们创建一个 Solid Lynx 项目并开始开发。
+
+## 系统要求
+
+- [Node.js 18](https://nodejs.org/en) 或更高版本。
+  - 使用 TypeScript 作为配置时需要 Node.js 18.19。
+
+## 开始开发
+
+开始使用 Lynx Solid 最快的方式是只搭建前端项目，然后用 **Lynx Explorer**（原生预览）或 **Lynx for Web**（浏览器预览）来查看效果。
+
+<Steps>
+
+### 创建新的 Lynx Solid 项目
+
+每个 Lynx Solid 应用都从三个文件起步——`package.json`、`rsbuild.config.ts`、`src/index.tsx`：
+
+```json title="package.json"
+{
+  "name": "my-lynx-solid-app",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "rsbuild build"
+  },
+  "dependencies": {
+    "@lynx-solid/runtime": "workspace:*",
+    "solid-js": "2.0.0-rc.6"
+  },
+  "devDependencies": {
+    "@lynx-js/rsbuild-plugin": "0.1.4",
+    "@rsbuild/core": "2.2.9",
+    "@lynx-js/types": "4.1.0",
+    "@lynx-solid/plugin": "workspace:*",
+    "typescript": "^5.5.0"
+  }
+}
+```
+
+```ts title="rsbuild.config.ts"
+import { defineConfig } from '@rsbuild/core'
+import { pluginSolidLynx } from '@lynx-solid/plugin'
+
+export default defineConfig({
+  environments: {
+    lynx: {},
+    web: {},
+  },
+  source: {
+    entry: {
+      main: './src/index.tsx',
+    },
+  },
+  plugins: [pluginSolidLynx()],
+})
+```
+
+```tsx title="src/index.tsx"
+import { createSignal } from 'solid-js'
+import { render } from '@lynx-solid/runtime'
+
+function Counter() {
+  const [count, setCount] = createSignal(0)
+
+  return (
+    <view style="display:linear;linear-direction:column;align-items:center;padding:48px">
+      <text style="font-size:28px">
+        count:
+        {count()}
+      </text>
+      <view
+        bindtap={() => setCount(c => c + 1)}
+        style="margin-top:24px;padding:12px 32px;background-color:#2c4f7c;border-radius:8px"
+      >
+        <text style="color:#ffffff;font-size:20px">increment</text>
+      </view>
+    </view>
+  )
+}
+
+render(() => <Counter />)
+```
+
+TypeScript 需要把 Solid JSX 映射到 Lynx 内建元素（`jsxImportSource`，`jsx: preserve` 让插件编译器消费 JSX——见 [TypeScript](/zh/guide/typescript)）。
+
+### 运行开发服务器
+
+1. 安装依赖：
+
+<PackageManagerTabs command="install" />
+
+2. 启动开发服务器：
+
+<PackageManagerTabs command="run dev" />
+
+你应该会看到类似这样的输出：
+
+```
+Rsbuild v2.2.9
+
+  ➜  Lynx       http://localhost:3000/main.lynx.bundle
+  ➜  Web        http://localhost:3000/main.web.bundle
+  ➜  ∟ Preview  http://localhost:3000/__web_preview?casename=main.web.bundle
+```
+
+开发服务器会生成三个 URL：
+
+- **Web Preview** — 在浏览器中打开此链接可快速预览你的应用。
+- **Lynx** — 用于通过 Lynx Explorer 进行原生渲染的 bundle URL（见下一步）。
+- **Web** — 原始 Web bundle（适用于集成到 Web 容器中）。
+
+### 在 Web 上预览
+
+在浏览器中打开 **Web Preview** URL。你将看到应用在 Web 上渲染的实时预览，编辑代码时会自动更新。
+
+下面就是上面那个计数器，可实时交互：
+
+<Go example="counter" defaultFile="src/index.tsx" />
+
+### 在原生设备上预览
+
+要查看应用的原生渲染效果，请使用 **Lynx Explorer**。把上面预览切到**二维码**页扫码，或复制终端里的 **Lynx** bundle URL 并粘贴到 Lynx Explorer 的"Enter Card URL"中。
+
+#### iOS 模拟器
+
+1. 从 [Mac App Store](https://apps.apple.com/us/app/xcode/id497799835) **安装 Xcode**。
+
+2. **下载 LynxExplorer**
+
+   对于 Apple Silicon (M1/M2/M3)，下载 [`LynxExplorer-arm64.app.tar.gz`](https://github.com/lynx-family/lynx/releases/latest/download/LynxExplorer-arm64.app.tar.gz)，然后解压：
+
+   ```bash
+   mkdir -p LynxExplorer-arm64.app/
+   tar -zxf LynxExplorer-arm64.app.tar.gz -C LynxExplorer-arm64.app/
+   ```
+
+   对于 Intel Mac，下载 [`LynxExplorer-x86_64.app.tar.gz`](https://github.com/lynx-family/lynx/releases/latest/download/LynxExplorer-x86_64.app.tar.gz)，然后解压：
+
+   ```bash
+   mkdir -p LynxExplorer-x86_64.app/
+   tar -zxf LynxExplorer-x86_64.app.tar.gz -C LynxExplorer-x86_64.app/
+   ```
+
+3. **安装到模拟器** — 打开 Xcode，选择 **Open Developer Tool** > **Simulator**，然后将 `.app` 文件夹拖入其中。
+
+#### Android
+
+从 [GitHub Releases](https://github.com/lynx-family/lynx/releases/latest/download/LynxExplorer-noasan-release.apk) 下载预构建的 APK 并安装到你的设备上。
+
+:::info 社区下载
+
+Lynx Explorer 也可在 [App Store](https://apps.apple.com/us/app/lynx-go-dev-explorer/id6743227790) 和 [Play Store](https://play.google.com/store/apps/details?id=com.funcs.io.lynx.go) 上获取，由社区贡献者发布。这些版本不由 Lynx 团队维护。
+
+:::
+
+:::details 从源码构建
+
+如果预构建的二进制文件不适用于你的环境，你可以从源码构建 Lynx Explorer：
+
+- [构建 iOS 版本](https://github.com/lynx-family/lynx/tree/develop/explorer/darwin/ios)
+- [构建 Android 版本](https://github.com/lynx-family/lynx/tree/develop/explorer/android)
+
+:::
+
+### 调试
+
+下载 [Lynx DevTool](https://github.com/lynx-family/lynx-devtool/releases) 桌面应用。通过 USB 连接你的设备并开始调试。查看 [Lynx 调试指南](https://lynxjs.org/guide/devtool/panels) 了解更多信息。
+
+</Steps>
+
+## 部署到生产环境
+
+你创建的 Lynx Solid 项目是一个**前端**项目 — 它生成 JavaScript bundle，由支持 Lynx 的原生应用加载和渲染。Lynx Explorer 是一个用于开发的预构建原生应用，但在生产环境中你需要自己的原生应用。
+
+### 使用 Sparkling（实验性）
+
+[Sparkling](https://tiktok.github.io/sparkling) 是 TikTok 开源的 Lynx 应用构建基础设施。提供 CLI 工具，可在数分钟内搭建带有 scheme 驱动导航的原生应用项目。目前为**实验性**，仅支持 **iOS 和 Android**。
+
+### 集成到现有应用
+
+如果需要最大的灵活性，可以将 Lynx 直接集成到你的现有应用中。支持 **iOS、Android、Harmony、桌面端和 Web**，让你完全控制 Lynx 在应用中的嵌入方式。
+
+按照 [Lynx 集成指南](https://lynxjs.org/guide/start/integrate-with-existing-apps) 开始集成。
+
+## 下一步
+
+- [什么是 Lynx Solid？](/zh/guide/introduction) — 了解架构和与 Solid for Web 的关键区别
+- [教程：计数器](/zh/guide/tutorial-counter) — 一步步做出可交互的计数器
+- [主线程脚本](/zh/guide/main-thread-script) — 主线程零延迟交互

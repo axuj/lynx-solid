@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@lynx-solid/compiler": [
+        "../../packages/compiler/src/index.ts"
+      ],
+      "@lynx-solid/compiler/*": [
+        "../../packages/compiler/src/*"
+      ],
+      "@lynx-solid/runtime": [
+        "../../packages/runtime/src/index.ts"
+      ],
+      "@lynx-solid/runtime/*": [
+        "../../packages/runtime/src/*"
+      ],
+      "@lynx-solid/plugin": [
+        "../../packages/plugin/src/index.ts"
+      ],
+      "@lynx-solid/plugin/*": [
+        "../../packages/plugin/src/*"
+      ]
+    }
+  }
+}

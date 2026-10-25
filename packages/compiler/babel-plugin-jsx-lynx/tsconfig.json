@@ -1,0 +1,22 @@
+{
+  "extends": "../../../config/tsconfig/base.json",
+  "compilerOptions": {
+    "target": "ES2015",
+    "lib": [
+      "ES2015",
+      "DOM"
+    ],
+    "types": [
+      "node"
+    ],
+    "jsx": "preserve",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "strict": false
+  },
+  "include": ["src"],
+  "exclude": ["dist"]
+}

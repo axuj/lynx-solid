@@ -1,0 +1,99 @@
+# Solid Features Compatibility
+
+Lynx Solid uses 100% of Solid's reactivity core from `solid-js` — same package as on the web. What changes is the **rendering target**: a ShadowElement tree flushed to Lynx over ops, instead of DOM nodes.
+
+Below is a feature-by-feature breakdown of the Solid features we've verified on Lynx. Where Lynx-specific caveats exist, they are called out inline. For details on how the dual-thread architecture works under the hood, see [Understanding the Dual-Thread Model](/guide/introduction#understanding-the-dual-thread-model).
+
+## Reactivity
+
+Lynx Solid reuses 100% of Solid's reactivity core. Every reactivity API in the `solid-js` CHEATSHEET works identically to standard Solid, with no Lynx-specific caveats or adaptations: `createSignal`, `createMemo`, `createEffect` (two-arg form), `createStore`, `batch`-free microtask flushing, `untrack`, context, `<Show>`, `<For>`, `<Switch>`/`<Match>`, `onSettled`, `onCleanup`.
+
+The 7guis counter and timer entries exercise signals, memos and effects with continuous updates:
+
+<Go example="7guis" defaultFile="src/counter/index.tsx" entry="src/counter" defaultEntryName="counter" />
+
+## Elements
+
+Use Lynx intrinsics, not HTML. The available tags are `view`, `text`, `image`, `scroll-view`, `list`, `list-item`, `input`, `textarea`, `page` (plus `svg` / `raw-text` escapes), with props from `@lynx-js/types`:
+
+```tsx
+// ❌ web Solid
+<div class="card" onClick={go}>
+  <span>hello</span>
+</div>
+
+// ✅ Lynx Solid
+<view class="card" bindtap={go}>
+  <text>hello</text>
+</view>
+```
+
+:::info
+Text content must be wrapped in `<text>` — Lynx does not support bare text nodes inside `<view>`.
+:::
+
+## Events
+
+Lynx events, Lynx names — verbatim from the Lynx docs:
+
+:::details Feature support details
+
+| Registration | Status | Notes |
+|---|---|---|
+| `bindtap` | Works | Tap, bubbles to ancestors. |
+| `catchtap` | Works | Tap, stops propagation natively. |
+| `bindscroll` | Works | Scroll events on `scroll-view`. |
+| `bindinput` / `bindconfirm` / `bindblur` | Works | Text input on `input` / `textarea`. |
+| `bindscrolltolower` | Works | Infinite-feed sentinel on `list`. |
+| `main-thread:bind*` | Works | Main Thread Script handlers; must carry `'main thread'`. No `bind`/`catch` sugar applies. |
+| `on*` aliases | Not supported | A Lynx event is not a DOM event (different propagation and event object); `onClick` would be misleading. |
+
+:::
+
+Try it live — one scroll-view drives both paths side by side: `bindscroll` (background, lags behind the finger) versus `main-thread:bindscroll` (main thread, in sync):
+
+<Go example="main-thread-draggable" defaultFile="src/index.tsx" />
+
+## Inputs
+
+`input` / `textarea` take `value` as initial content and report through `bindinput` / `bindconfirm` / `bindblur`. The TodoMVC header and edit rows use all three:
+
+<Go example="todomvc" defaultFile="src/TodoHeader.tsx" />
+
+:::warning Caveat
+There is no `autofocus` attribute and no `type="checkbox"` / `type="radio"` / `<select>` — Lynx has no native equivalents. Build toggles from `view` + `bindtap` (as TodoMVC does) instead.
+:::
+
+## Lists
+
+`<For>` tracks rows by reference on the background thread; native recycling additionally needs Lynx's `item-key` on every `list-item`. Missing or colliding `item-key`s is a common cause of blank / wrong cells:
+
+<Go example="scrolling" defaultFile="src/ListBasic/index.tsx" entry="src/ListBasic" defaultEntryName="ListBasic" />
+
+See [scroll-view vs list](/guide/scroll-view-vs-list) for the full container guide.
+
+## The `<page>` Top-Level Node
+
+Every Lynx screen has one native [`<page>`](https://lynxjs.org/api/elements/built-in/page) root. `render(() => <App />)` mounts under it automatically and returns a disposer that unmounts everything:
+
+```tsx
+const dispose = render(() => <App />)
+// later:
+dispose()
+```
+
+Write an explicit `<page>` only when you need to bind a class, style, or event to the root. Use at most one per screen, as the outermost element.
+
+## No DOM Globals
+
+`document`, `window`, `localStorage` and DOM query APIs don't exist. Layout queries go through `lynx.createSelectorQuery()` (async, background thread) or Main Thread Script (synchronous, main thread). Timers exist on both threads but need arrow-wrapped arguments (see [Introduction](/guide/introduction)).
+
+## Unsupported Features
+
+Some web-only concepts have no Lynx counterpart:
+
+| Feature | Reason | Alternative |
+|---------|--------|-------------|
+| React-only patterns (hooks rules, concurrent rendering) | No Solid counterpart here | — |
+| Route-level code splitting | Lynx bundles must stay single-file (`performance.chunkSplit: 'all-in-one'`) | TanStack file routing uses the Generator half only — see [Routing](/guide/routing) |
+| `key` prop | Solid tracks `<For>` rows by identity; there is no `key` prop | Pass Lynx `item-key` for native recycling |

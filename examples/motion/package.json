@@ -1,0 +1,23 @@
+{
+  "name": "@lynx-solid/dev-motion",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "rsbuild build",
+    "typecheck": "tsc --noEmit -p ./tsconfig.json"
+  },
+  "dependencies": {
+    "@lynx-js/luna-styles": "^0.2.2",
+    "@lynx-solid/plugin": "workspace:*",
+    "@lynx-solid/runtime": "workspace:*",
+    "motion-dom": "^13.3.0",
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "@lynx-js/rsbuild-plugin": "catalog:",
+    "@lynx-js/types": "catalog:",
+    "@rsbuild/core": "catalog:",
+    "typescript": "catalog:"
+  }
+}

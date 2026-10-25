@@ -1,0 +1,234 @@
+import { PackageManagerTabs } from '@theme'
+
+# Using Tailwind CSS
+
+[Tailwind CSS](https://tailwindcss.com/) is a utility-first CSS framework. Combined with Lynx Solid, it lets you build native Lynx UIs using the same utility classes you already know from the web.
+
+This guide walks through integrating Tailwind CSS with Lynx Solid, from basic setup to a design-token system with runtime theme switching. The dedicated demo below runs the full setup — preset, plugin, tokens and a three-theme switcher:
+
+<Go example="tailwind" defaultFile="src/index.tsx" />
+
+## Setup
+
+### 1. Install dependencies
+
+<PackageManagerTabs command="install -D tailwindcss@3 @lynx-js/tailwind-preset rsbuild-plugin-tailwindcss" />
+
+:::tip Tailwind v3 Required
+`@lynx-js/tailwind-preset` and `rsbuild-plugin-tailwindcss` require **Tailwind CSS v3**. Tailwind v4 uses a completely different architecture and is not yet supported. Make sure you do **not** have `@tailwindcss/postcss` installed — that is a v4-only package that conflicts with the v3 setup.
+:::
+
+- **`@lynx-js/tailwind-preset`** — A Tailwind preset that replaces core plugins with Lynx-compatible equivalents. See the [official docs](https://lynxjs.org/rspeedy/styling.html#using-tailwind-css) for details.
+- **`rsbuild-plugin-tailwindcss`** — Rsbuild integration for Tailwind CSS.
+
+### 2. Configure Tailwind
+
+```ts title="tailwind.config.ts"
+import type { Config } from 'tailwindcss'
+import preset from '@lynx-js/tailwind-preset'
+
+const config: Config = {
+  content: ['./src/**/*.{tsx,ts,jsx,js}'],
+  presets: [preset],
+}
+
+export default config
+```
+
+### 3. Add the Rsbuild plugin
+
+```ts title="rsbuild.config.ts"
+import { defineConfig } from '@rsbuild/core'
+import { pluginSolidLynx } from '@lynx-solid/plugin'
+import { pluginTailwindCSS } from 'rsbuild-plugin-tailwindcss'
+
+export default defineConfig({
+  plugins: [
+    pluginSolidLynx(),
+    pluginTailwindCSS({
+      config: 'tailwind.config.ts',
+      exclude: [/[\\/]node_modules[\\/]/],
+    }),
+  ],
+})
+```
+
+### 4. Import Tailwind in your CSS
+
+```css title="src/hackernews.css"
+@tailwind base;
+@tailwind utilities;
+```
+
+That's it! You can now use Tailwind utility classes on Lynx elements:
+
+```tsx title="src/components/NewsItem.tsx"
+<view class="bg-hn-card flex flex-row border-b border-hn-border">
+  <text class="text-hn-green font-bold">Hello, Tailwind!</text>
+</view>
+```
+
+## Design Tokens with CSS Variables
+
+A common pattern in modern component libraries is to define a **design language** as CSS custom properties, then reference them from Tailwind. This gives you a single source of truth for colors that can be swapped at runtime. The demo above does exactly this:
+
+### Define your tokens
+
+```css title="src/App.css"
+@tailwind base;
+@tailwind utilities;
+
+:root {
+  --color-background: rgba(9, 9, 11, 1);
+  --color-card: rgba(24, 24, 27, 1);
+  --color-card-foreground: rgba(250, 250, 250, 1);
+  --color-primary: rgba(255, 100, 72, 1);
+  --color-primary-foreground: rgba(255, 255, 255, 1);
+  --color-border: rgba(63, 63, 70, 1);
+}
+```
+
+### Wire them into Tailwind
+
+```ts title="tailwind.config.ts"
+const config: Config = {
+  // ...
+  theme: {
+    extend: {
+      colors: {
+        background: 'var(--color-background)',
+        card: {
+          DEFAULT: 'var(--color-card)',
+          foreground: 'var(--color-card-foreground)',
+        },
+        primary: {
+          DEFAULT: 'var(--color-primary)',
+          foreground: 'var(--color-primary-foreground)',
+        },
+        border: 'var(--color-border)',
+      },
+    },
+  },
+}
+```
+
+Now `bg-primary`, `text-card-foreground`, `border-border` all resolve through your CSS variables. The `:root` values act as the default theme. (The HackerNews example uses the same pattern with its own `hn-*` namespace.)
+
+### Required Lynx flags
+
+For CSS variables to work on Lynx Native, two engine flags must be enabled:
+
+- **`enableCSSInheritance`** — Cascades *normal* inheritable properties (font-size, color, …) from parent to child, as on web. Enable it when a theme changes those on a root and expects children to follow. Custom properties (`--*`) inherit **regardless** of this flag — the engine copies them before the gate (`StyleResolver::InheritParentStyle`).
+- **`enableCSSInlineVariables`** — Gates runtime `--*` writes through inline styles (the `style` binding in Approach A / `setProperty` in Approach B) and re-cascade of those overrides, so theme switches apply at runtime.
+
+```ts title="rsbuild.config.ts"
+pluginSolidLynx({
+  enableCSSInheritance: true,
+  enableCSSInlineVariables: true,
+})
+```
+
+> The flags are independent of the variables' mere *visibility*: stylesheet-defined custom properties (`:root`, class rules) already reach descendants with neither flag. Static color values (e.g. `primary: '#3b82f6'`) need no flags at all.
+
+## Runtime Theme Switching
+
+With design tokens wired through CSS variables, switching themes is just a matter of overriding the variable values.
+
+### Approach A: Inline style (recommended)
+
+The most web-familiar approach — set CSS variables via a `style` binding on a root element. This is how shadcn/ui and Radix Themes handle theming on the web.
+
+Requires `enableCSSInlineVariables` — the `--*` writes ride the inline-style store, which the engine only collects when that flag is on. Add `enableCSSInheritance` only if the style object also sets normal inheritable properties (font-size, color, …) you expect children to inherit; pure `--*` themes need just InlineVariables.
+
+```tsx
+import { createMemo, createSignal } from 'solid-js'
+
+const themes = {
+  dark: {
+    '--color-background': 'rgba(9, 9, 11, 1)',
+    '--color-primary': 'rgba(255, 100, 72, 1)',
+    // ...
+  },
+  light: {
+    '--color-background': 'rgba(255, 255, 255, 1)',
+    '--color-primary': 'rgba(234, 88, 12, 1)',
+    // ...
+  },
+}
+
+function ThemedApp() {
+  const [currentTheme, setCurrentTheme] = createSignal<'dark' | 'light'>('dark')
+  const themeStyle = createMemo(() => themes[currentTheme()])
+
+  return (
+    <scroll-view style={themeStyle()} class="bg-background">
+      <text class="text-primary">Themed text</text>
+      <view bindtap={() => setCurrentTheme('light')}>
+        <text>Switch to Light</text>
+      </view>
+    </scroll-view>
+  )
+}
+```
+
+### Approach B: Element `setProperty` API
+
+A Lynx-native alternative that updates CSS variables directly on an element, without going through a `style` binding. It still needs **`enableCSSInlineVariables`** — `setProperty` writes the same inline custom-property store the engine gates on that flag (descendants then read them via the *unconditional* custom-property inheritance, so `enableCSSInheritance` is not what makes them visible). Grab the element (via `main-thread:ref` or a selector query) and pass the whole variable map to its `setProperty` in one call; every `var(--color-*)` consumer below it re-cascades. This path has not been verified against our runtime yet — prefer Approach A unless you have measured a reason not to.
+
+See the [Lynx CSS Variable API](https://lynxjs.org/api/css/properties/css-variable.html) for full details on `setProperty`.
+
+### Approach C: Class-based switching (used by the demo above)
+
+The demo at the top switches three themes (dark / light / ocean) by toggling one class on the scroll root, driven by a signal:
+
+```tsx
+const [currentTheme, setCurrentTheme] = createSignal<'dark' | 'light' | 'ocean'>('dark')
+const themeClass = createMemo(() => `theme-${currentTheme()}`)
+
+<scroll-view class={`w-full h-full bg-background ${themeClass()}`} …>
+```
+
+```css
+/* Dark is the :root default; light/ocean override it. */
+.theme-light { --color-background: rgba(255, 255, 255, 1); /* … */ }
+.theme-ocean { --color-background: rgba(15, 23, 42, 1); /* … */ }
+```
+
+Tapping a theme button flips the signal; the class — and every `var(--color-*)` consumer below it — follows with no bundle change. Requires both flags above (set in the Elk, HackerNews and tailwind configs). The Elk example uses the same pattern with two themes (`.app-dark` over `:root`).
+
+See the [Lynx CSS Variable API](https://lynxjs.org/api/css/properties/css-variable.html) for full details.
+
+## Troubleshooting
+
+### New Tailwind classes don't appear on HMR
+
+**Symptom:** You change e.g. `bg-slate-800` to `bg-red-500`, save, but the emulator doesn't update. Switching _back_ to a previously-used class works, but new classes don't show up until you restart the dev server.
+
+**Cause:** Tailwind v3's JIT compiler generates CSS only for the utility classes it finds in your source files. When a file changes, JIT must re-scan it and generate any newly-referenced classes.
+
+The most common cause is **mixing Tailwind v3 and v4 packages**:
+
+| Package | Version | What it is |
+|---------|---------|------------|
+| `tailwindcss` | 3.x | Tailwind v3 core (also the PostCSS plugin) |
+| `@tailwindcss/postcss` | 4.x | Tailwind **v4** PostCSS plugin -- **incompatible with v3** |
+
+These two cannot coexist. The Lynx ecosystem (`@lynx-js/tailwind-preset`, `rsbuild-plugin-tailwindcss`) requires **Tailwind v3**.
+
+**Fix:** Remove the v4 package:
+
+```bash
+nub remove @tailwindcss/postcss
+```
+
+Then follow the [setup steps above](#1-install-dependencies).
+
+### `content` path doesn't match your source files
+
+If Tailwind classes work in some files but not others, check that the `content` array in `tailwind.config.ts` includes all relevant paths:
+
+```ts
+content: ['./src/**/*.{tsx,ts,jsx,js}'],
+```
+
+Adjust the glob if your source files live elsewhere (e.g. `pages/`, `components/`).

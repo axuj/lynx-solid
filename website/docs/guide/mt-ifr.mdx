@@ -1,0 +1,509 @@
+# MT-IFR (`enableMtIfr`): the first screen the main thread paints itself
+
+import { Badge } from '@theme'
+
+<Badge text="off by default" type="warning" />
+
+> Every number below was measured on one device pair, with one build configuration and one workload —
+> treat the figures as indicative rather than universal. A different device, app shape or bundle size can
+> move them substantially, so read the same-window deltas rather than the absolute values. ReactLynx is
+> included only as a calibration baseline — a mature dual-thread Lynx renderer to scale the measurements
+> against — and nothing here is a claim about that project.
+
+:::warning Summary
+`enableMtIfr` is **off by default** and fully opt-in. With it on the **main thread renders the first
+screen itself**, and the background's first batch is **reconciled** against what the main thread painted
+instead of being replayed.
+
+**It is correct on device, and it is currently slower than both alternatives.** Low-end device
+(Kirin 970, Geekbench 6 single-core ≈ 420), process start → first screen, 1000 rows, one window with the three arms
+interleaved, n=11:
+
+| Arm | median | IQR | unresolved |
+|---|---|---|---|
+| our default (IFR off) | **2262 ms** | [2161, 2310] | none |
+| our IFR | 3174 ms | [3146, 3255] | none |
+| ReactLynx | 3582 ms | [3564, 3615] | none |
+
+Δ IFR − default = **+912 ms**: IFR loses to our own default path. Δ ReactLynx − IFR = +408 ms *at this
+size* — but ReactLynx has the **highest per-row cost** of the three, so the order reverses on a small
+first screen, where it is the fastest arm and IFR is not (row-count sweep below). Every launch resolved
+in this window; nothing was re-issued or dropped.
+
+The cost is structural, not a defect: IFR moves the first-screen render off V8 onto PrimJS (Lepus, no
+JIT) on the main thread, so it pays more per row for the same work. What it removes — the background
+chain's tail — is smaller than that at this size. The reconcile is a *later* step and is not what the
+number measures (see *Why it currently costs more*).
+
+:::
+
+## What `enableMtIfr` does
+
+With it on, the **main thread renders the first screen itself** during `renderPage`, instead of showing
+an empty page until the background bundle has booted and shipped its ops across the thread boundary.
+
+- The MT gets the **full component graph** (instead of `worklet-mt-loader` reducing the runtime to
+  import shells), and `solid-js` resolves to its **server build** on the MT only: a one-shot evaluator —
+  signal setters warn rather than mutate, render effects run synchronously, no scheduler. **No reactive
+  graph and no effects run on the Main Thread.**
+- The MT **applies every effect to PAPI as the renderer produces it** (direct emission,
+  `main-thread/direct-sink.ts`): one pass, no op stream to walk, no replay. The frames are still
+  recorded — as the report the reconcile below reads.
+- When the background's first batch arrives it is **diffed against what the MT painted**
+  (`main-thread/hydrate.ts`, frame by frame): **identical → nothing to do**; same identity, different
+  value → the background's frames are applied onto the MT tree **in place** (no teardown, no flash);
+  structural divergence → the MT tree is torn down and the background batch replayed.
+
+On device the two renders agree at 1000 rows, so the free path is the one actually taken: the MT's
+recording holds the same `29048` frame-array entries the background sends, over `1001` `INSTANTIATE`
+frames (one per row template plus the page template), and the reconcile reports `match`.
+
+## Measurement conventions
+
+> The definitions in this section govern every number on the page.
+
+| | |
+|---|---|
+| Start | `am_proc_start` from `logcat -b events` — the process really was forked. Not `LynxShell create`: that is already past process creation, library mapping and engine init (44% of the real cold start here) |
+| End | the **first** `layout finish with result size` reporting `Time taken` ≥ **1.5 ms**. The engine lays out the **empty page** first, and that floor is the whole discriminator: 0.03–1.00 ms (empty) against 2.18–12.3 ms (content) across both devices. `lynx runtime ready` is **not** part of the rule (it is a milestone, and IFR's claim is painting *before* it); nor is the **last** `layout finish` (a reconciling framework lays out again) |
+| Device | **low-end**: Kirin 970 (2017, Android 10) — Geekbench 6 single-core ≈ **420**; **flagship**: Snapdragon 8 Gen 3 (2023, Android 16) — ≈ **2200** (GB6 numbers come from NanoReview's public aggregate, not from this rig; both are described further in the reproduction section). Each number below says which device it came from; both ran the same protocol, the same three bundles (identical bytes, hash-keyed URLs) and the same host |
+| Samples | process-level points, **interleaved** (one rep of each arm, three arms per rep), **n=11**; medians over valid reps only |
+| Builds | probe-free: `def-1000` (IFR off), `ifr-1000` (IFR on), `react-1000` (ReactLynx) — 1000 rows, no timing flag, no diagnostics define |
+| Harness | `packages/benchmark/harness/ab-device.mjs` — the only device driver (launch, window, verdict); `sweep-rows.mjs` is a thin orchestrator that parses no logs itself |
+
+**No rep is dropped silently.** The driver holds one `adb logcat` stream for the whole session and anchors
+each rep on its own `am_proc_start` (recorded before launch). Failed launches are reported by name next to
+the medians (`launch-error`, `missing: am_proc_start | LynxShell create | lynx runtime ready`,
+`host-killed: <killer>`, `cap-exceeded`), a dead launch is re-sent at most twice before it counts as a gap,
+and every rep is accounted for — no silent drop, no wrong number.
+
+**Bundles are cached**: URLs are keyed by content hash and served `immutable` per build, so the (~113%
+larger) IFR bundle is not re-downloaded every rep.
+
+## Why it currently costs more
+
+- **The main thread's engine is slower and it is not a build issue.** The MT runs PrimJS (a QuickJS
+  fork) over Lepus bytecode with no JIT; the background runs V8 with a JIT. The engine logs state the
+  split plainly (`primjs: Loading libwasm.so`, `lepusng_debugger` on the MT; `v8_runtime`,
+  `V8Runtime::evaluateJavaScript` on the background).
+- **The render is the same work, moved.** The recording shows the MT building the identical frame set
+  the background would have built (`29048` frame-array entries over `1001` `INSTANTIATE` frames), so IFR
+  is not doing less — it is doing it on the slower engine.
+- **The reconcile is a post-frame cost, and it is measurable.** It runs when the background's first batch
+  arrives — but the main thread is single-threaded and still inside `renderPage`, so the batch is queued and
+  the walk starts only after the frame has been handed to the engine. Measured on the low-end phone with a
+  console probe: the reconcile starts ~20 ms after `renderPage` returns and takes **0 / 76 / 304 ms** at
+  0 / 250 / 1000 rows (48 / 7 298 / 29 048 frames, i.e. ~0.010 ms per frame; 3/3 identical at each point).
+  It therefore never enters the measured first-screen number, at any row count; what it delays is the point
+  at which the background's tree takes over.
+
+IFR removes the background chain's tail from the critical path (bundle parse, app evaluation, shipping
+the batch). At 1000 rows that saving is smaller than the cost of re-doing the render on the MT.
+
+## When it wins: the row-count sweep
+
+The trade has a crossover, and it sits at a **small** first screen. Same device, one window per row
+count, 11 interleaved reps per arm, **three arms per rep**: IFR off, IFR on, and ReactLynx — which
+renders its first screen on the main thread by construction, so it is the fair reference for what an MT
+render can cost. Every arm is its own build per row count (the row count is baked in; the bundle size
+does not change with it, so there is no size confound). The default and IFR arms — same app, same rows —
+were compared pixel by pixel below the status bar at every row count and are identical, so the faster
+one is not drawing less; the ReactLynx arm is a different codebase, and no pixel claim is made for it.
+
+| Rows |        Default |             IFR |        ReactLynx | Δ ifr−def | Δ react−ifr |
+| ---: | -------------: | --------------: | ---------------: | --------: | ----------: |
+|    0 |  384 [364, 393] |  348 [345, 361]   |  314 [308, 324]   |       −36 |         −34 |
+|   25 |  419 [392, 428] |  385 [370, 398]   |  346 [332, 354]   |       −34 |         −39 |
+|   50 |  434 [415, 450] |  433 [405, 440]   |  400 [394, 426]   |        −1 |         −33 |
+|   75 |  458 [436, 475] |  480 [451, 481]   |  447 [419, 451]   |       +22 |         −33 |
+|  100 |  490 [484, 529] |  512 [488, 537]   |  484 [468, 501]   |       +22 |         −28 |
+|  250 |  656 [647, 671] |  734 [728, 743]   |  730 [727, 746]   |       +78 |          −4 |
+|  500 |  975 [970, 977] | 1160 [1154, 1169] | 1201 [1185, 1203] |      +185 |         +41 |
+| 1000 | 2262 [2161, 2310] | 3174 [3146, 3255] | 3582 [3564, 3615] |      +912 |        +408 |
+
+Medians in ms, IQR in brackets, `am_proc_start` → first content frame. Every row count is its own window;
+the 1000-row point is the headline table above. Frames that land before `lynx runtime
+ready` are **not** marked: on this device the IFR and ReactLynx arms at small row counts paint before the
+background runtime is up, which is the feature under test, not an exception. The rule scores them like any
+other frame (see *Measurement conventions*).
+
+Absolute values are a property of one session on one device: the same table taken on a thermally loaded
+device runs 20-30 % slower, which is why windows are run back-to-back and only same-window Δs are read. The
+derived crossovers are reported as **bands, not points**: ReactLynx's intercept is only ~40 ms below IFR's
+while its slope is ~0.16 ms/row steeper, so a few ms of noise on the small-N arms moves that crossing by
+tens of rows. The IFR-vs-default crossing is the tighter one (56-96 rows across sessions).
+
+### The same sweep on the flagship
+
+One device swap, same protocol, same three apps, same host — the
+flagship (Snapdragon 8 Gen 3, Geekbench 6 single-core ≈ 2200):
+
+| Rows |        Default |             IFR |        ReactLynx | Δ ifr−def | Δ react−ifr |
+| ---: | -------------: | --------------: | ---------------: | --------: | ----------: |
+|    0 |  158 [152, 162] |  156 [148, 168]   |  137 [135, 142]   |        −2 |         −19 |
+|   25 |  180 [177, 183] |  176 [167, 183]   |  164 [158, 165]   |        −4 |         −12 |
+|   50 |  189 [181, 196] |  194 [191, 204]   |  191 [180, 203]   |        +5 |          −3 |
+|   75 |  209 [197, 214] |  225 [218, 235]   |  209 [203, 212]   |       +16 |         −16 |
+|  100 |  221 [213, 223] |  252 [246, 269]   |  232 [228, 233]   |       +31 |         −20 |
+|  250 |  322 [316, 328] |  407 [386, 425]   |  379 [377, 383]   |       +85 |         −28 |
+|  500 |  587 [545, 606] |  926 [860, 984]   |  834 [821, 991]   |      +339 |         −92 |
+| 1000 | 1252 [1228, 1300] | 1922 [1908, 1984] | 1914 [1809, 2011] |      +670 |          −8 |
+
+Every rep resolved on both devices (11/11 per arm). Re-run on the shipped stream rig (n=11, all reps
+resolved) this table reproduces: 166 / 157 / 146 ms at 0 rows and 1297 / 2038 / 2093 at 1000, with the same
+crossovers (44 rows, no ReactLynx-vs-IFR crossing, 67 rows) — the absolute drift against the session above
+is device heat, not the transport.
+
+The least-squares fit over the linear region (`N ≤ 500`, where the per-row cost is stable; the 500-1000
+segment steepens on all three arms) is `377 + 1.178·N` (default), `349 + 1.609·N` (IFR) and
+`308 + 1.769·N` (ReactLynx) ms. The intercepts land on the measured 0-row values (384 / 348 / 314), so
+they are fixed costs rather than extrapolations: IFR wins a constant **28 ms** over our default and pays
+**0.43 ms per row** for it. ReactLynx has the **lowest fixed cost** (41 ms below IFR, 69 ms below our
+default by the fit; 34 ms and 70 ms at the measured 0-row point) and the **highest per-row cost**
+(1.769 against 1.609 and 1.178 ms/row), so the arms cross three times:
+
+| Pair | Crosses at | Faster below | Faster above |
+| --- | ---: | --- | --- |
+| ReactLynx vs our default | ~117 rows | ReactLynx | our default |
+| ReactLynx vs IFR | ~259 rows | ReactLynx | IFR |
+| IFR vs our default | ~65 rows | IFR | our default |
+
+Across sessions (same protocol, same device, 11 reps each) IFR-vs-default lands at **56-96 rows**,
+ReactLynx-vs-IFR at **180-310 rows** and ReactLynx-vs-default at **109-141 rows**. The points above are one
+session's fit; only the bands are stable across sessions — near 250 rows the ReactLynx/IFR gap is a few ms,
+so its sign is inside the noise.
+
+The flagship fit over the same range is `146 + 0.845·N` (default), `116 + 1.525·N` (IFR) and
+`111 + 1.368·N` (ReactLynx) ms, with intercepts again on the measured 0-row values (158 / 156 / 137). The
+structure changes twice:
+
+| Pair | Flagship | Low-end |
+| --- | ---: | ---: |
+| IFR vs our default | ~44 rows | ~65 rows |
+| ReactLynx vs IFR | **no crossover** | ~259 rows |
+| ReactLynx vs our default | ~66 rows | ~117 rows |
+
+- **IFR's internal win ends earlier** (44 rows against 65): the constant it saves is the same order of
+  magnitude on both devices, but its per-row penalty is larger relative to a machine where everything else
+  is fast.
+- **ReactLynx stops losing on the flagship.** Its per-row cost (1.368 ms) is still above our default's
+  (0.845) but now *below* IFR's (1.525), and its fixed cost is the lowest of the three, so on the flagship
+  it is faster than IFR at every row count — the two are inside each other's IQR at 1000 rows (1914 vs
+  1922 ms). The "ReactLynx pays the heaviest per-row cost" statement is a property of the low-end device,
+  not of ReactLynx.
+
+**On neither device is there a row count between 0 and 1000 where IFR is the fastest of the three.** On the
+low-end device ReactLynx wins below ~109-141 rows and our own default above it; IFR's only win is *internal* —
+over our own background path, by 36 ms at 0 rows — and it ends at ~65 rows, long before the ~180-310 rows at
+which it would overtake ReactLynx. On the flagship that internal win is down to 2 ms at 0 rows (inside the
+noise) and ends at ~44 rows, while ReactLynx is ahead of IFR everywhere: at 0-25 rows by 12-19 ms, and level
+with it at 1000 rows. Between the two crossovers IFR is slower than both of its neighbours, and the direct
+bracket agrees (at 100 rows the three are 490 / 512 / 484 ms — IFR is 22 ms behind our default and 28 ms
+behind ReactLynx). MT-IFR is therefore a
+real but *internal* optimisation: it shortens our own path's tail without reaching the external reference,
+and on a faster device even that advantage narrows to the point of not being measurable at the smallest
+screens.
+
+Part of ReactLynx's small-screen lead is not the render at all: its bundle is **95 KB** against our
+119 KB (IFR: 254 KB), so there is less to fetch and parse before anything can be on screen.
+
+**Why the win is that small.** Compare the two arms' tails after `LoadTemplate`, which is where they
+stop doing the same work (low-end device). At 25 rows the default arm needs 109 ms from `LoadTemplate` to
+its content frame (background boot → V8 render → ship → apply → layout); IFR needs 75 ms (MT bundle
+evaluation → PrimJS render → layout) and is on screen before the background runtime is even up. That 34 ms
+is the whole fixed advantage, and it is close to the fit's 28 ms. At 1000 rows the same two tails are
+1969 ms and 2887 ms. So IFR trades a constant ~28 ms of background-chain tail for ~0.43 ms per row of extra
+rendering on the slower engine — cheap for a handful of rows, ruinous for a table. On the flagship the same
+trade is visible in the intercepts (156 − 158 = −2 ms) and in the steeper IFR slope (1.525 against
+0.845 ms/row): less to save, more to pay.
+
+That makes the practical rule narrow: IFR is worth measuring when the first screen is **tiny** (tens of
+rows) *and* the background boot is unusually expensive — and even then it has not beaten ReactLynx on
+either device. At 0-50 rows the whole first screen is already 314-434 ms, so the 1-36 ms IFR gains over our
+own path is about what one layout pass costs, and it is bought with a 113% larger bundle. On a list or table
+screen it is a straight loss.
+
+One related fact: **there is no supported single-threaded Lynx configuration to compare against.**
+`ThreadStrategyForRendering.ALL_ON_UI` does *not* move application JavaScript onto the UI thread — the JS
+runtime keeps its own `Lynx_JS` thread under every thread strategy; `ALL_ON_UI` only moves the engine and
+layout. The only switch that really collapses JS onto the UI thread is `enable_js = false`, and in the
+engine repository it is called from exactly one place: a unit test.
+
+### Across the example apps
+
+Same low-end phone, **15** interleaved reps per app, one window, and **only against our own default
+path** — this group has no ReactLynx arm:
+
+| App | Default | IFR | Δ | IQR (default → IFR) | Bundle (default → IFR) |
+|---|---:|---:|---:|---|---|
+| counter | 353 | 331 | −22 | 321–369 → 309–347 | 81.9K → 201.6K (+146%) |
+| todomvc | 372 | 362 | −10 | 358–384 → 349–377 | 98.6K → 232.9K (+136%) |
+| 7guis | 339 | 333 | −6 | 327–358 → 316–351 | 81.0K → 199.8K (+147%) |
+| style-demo | 359 | 358 | −1 | 346–374 → 340–376 | 87.9K → 211.6K (+141%) |
+| tailwind | 376 | 358 | −18 | 360–396 → 338–365 | 105.6K → 237.0K (+124%) |
+| motion | 365 | 352 | −13 | 354–391 → 341–360 | 198.7K → 324.5K (+63%) |
+| scrolling | 362 | 361 | −1 | 347–385 → 338–377 | 92.6K → 218.1K (+135%) |
+| networking | 451 | 373 | **−78** | 435–476 → 358–383 | 186.8K → 390.9K (+109%) |
+| hackernews | 481 | 521 | **+40** | 460–511 → 504–563 | 241.2K → 551.5K (+129%) |
+| elk | 570 | 645 | **+75** | 560–574 → 642–651 | 473.4K → 977.5K (+107%) |
+
+One window, 15 interleaved reps per arm. Every launch resolved except elk's IFR arm (13/15: two launches never
+painted inside the 12 s cap). By the driver's **pre-committed** rule — |Δ| < 15 ms is noise, a win needs |Δ| ≥ 25 ms
+with disjoint IQRs, anything else is a trend — **networking wins** (−78), **elk loses** (+75), **hackernews trends
+against IFR** (+40, IQRs overlap), and **counter (−22) and tailwind (−18) trend in its favour**; the remaining five
+rows are inside the noise.
+
+IFR buys exactly one thing: **a frame the main thread can present before the background's first batch lands** — the
+metric stops at the first content frame. Its cost is fixed: the MT bundle is 63–147% bigger and has to be fetched and
+evaluated there. Whether that trade pays off is decided by what the MT can paint at once, which the reconcile branch
+shows directly (each app launched cold, instrumented):
+
+| App | Ops the MT painted | Ops in the BG's first batch | Reconcile |
+|---|---:|---:|---|
+| counter | 22 | 22 | `match` — nothing left to do |
+| todomvc | 38 | 38 | `match` |
+| networking | 33 (the `Loading posts…` shell) | 48 | `diverge` (`frame-kind` @20) → teardown + replay |
+| hackernews | **0** | 188 | `diverge` (`length`) → teardown + replay |
+| elk | **0** | 421 | `diverge` (`length`) → teardown + replay |
+
+`networking` paints its `Loading posts…` shell synchronously, so its first content frame comes from the MT; the BG
+batch then diverges (`frame-kind`: by the time it is produced the fetch has resolved and the tree is shell + list).
+A synchronous, small first screen (`counter`, `todomvc`) matches frame for frame and its delta disappears into the
+noise.
+
+::: warning Router-based apps get no main-thread first screen
+
+`hackernews` and `elk` paint **0 ops** on the MT under IFR (instrumented: only the page root is created, `els = 2`),
+so they only add bundle and evaluation cost on the MT (+40 / +75 ms). Two measured facts about why:
+
+- Their first screen sits behind TanStack Router, whose boot runs from `Transitioner`'s `onSettled` →
+  `queueMicrotask(() => router.load())`. The MT runs solid's **server build** (rule 2), where `onSettled` is an empty
+  implementation.
+- Their modules read `window` while evaluating, which on the MT aborts the render before `renderPage`:
+  `ReferenceError: window is not defined` (logcat). Faking `window` on the MT removes the throw but still paints 0 ops
+  and measures worse — +61 / +103 ms (the "browser" probe flips query-core's `isServer`, which
+  attaches an observer and fetches during the first render).
+
+:::
+
+Router apps can run under IFR, but they have to drop the browser API the router reaches for: TanStack Router's
+search-string codec builds a `URLSearchParams`, which the main thread does not have, and the router is created at module
+scope — so the main thread died before the first frame. The router exposes `parseSearch` / `stringifySearch` for exactly
+that; overriding them with string-only versions (see `examples/elk/src/router-search.ts`) removes the dependency instead
+of faking a global. The override is compile-time: `__MAIN_THREAD__` is true only in the main-thread copy, so the
+background copy keeps TanStack's default codec and never even bundles ours.
+
+This group only answers "IFR vs our default". ReactLynx is still the fastest arm on small screens (see the
+crossovers above) — beating the default is not the same as being fastest. The bundle column is the size of the
+bundles measured in this window, using the entry each preview below embeds (7guis `counter`, motion `basic`,
+scrolling `ScrollViewBasic`). What travels is the ratio: **1.63–2.47×** (motion the smallest, 7guis the largest).
+
+## What first-screen code may assume
+
+`enableMtIfr` evaluates the **same source** once per thread. There are only four rules:
+
+1. **No I/O and no host-surface reads at module scope.** On the background (BG) thread `window`/`self`/`document`/
+   `fetch` are **parameters injected by `RuntimeWrapperWebpackPlugin`**; the main thread (MT) has no such wrapper. The
+   runtime installs exactly **one** global — the `queueMicrotask` guard — and only on the BG, because **solid's own
+   mount path** calls the bare identifier (`onHydrationEnd` runs on every render; without it every app dies at first
+   render on device). That global is a forwarder to `lynx.queueMicrotask`, reachable only through the **bare
+   identifier**: `lynx` is a `RuntimeWrapperWebpackPlugin` parameter and the BG has no `lynx` on `globalThis`. The MT
+   needs nothing here — its JS context provides `queueMicrotask` itself. Do not use `Promise.resolve().then` as a
+   microtask primitive on this host: `Promise` is a JS polyfill whose second-level `.then` loses to a `setTimeout(0)`
+   (see benchmark-framework's device selftest).
+
+   Everything else is the app's job, in its own
+   `polyfills.ts` (see `examples/elk/src/polyfills.ts`; motion's gate is `examples/motion/src/adapters/shim-entry.ts`):
+   - `self` is the one TanStack's client build requires unconditionally: it tags every router instance with
+     `self.__TSR_ROUTER__`, and `isServer` is a compile-time `false` in that bundle, so no feature test protects the read.
+     Installing it needs care: on the BG `self` is a wrapper parameter, so the assignment has to target that binding,
+     while on the MT the bare binding does not exist and a strict-mode module throws `ReferenceError: self is not
+     defined` during evaluation — before anything can paint. The examples therefore gate the bare assignment on the
+     MT-IFR marker the runtime installs (`'__lynxSolidMountIfrRoot' in globalThis`, present only in IFR builds) and
+     let the `globalThis.self` install cover the MT. A non-IFR MT bundle carries no app code at all.
+   - `window` is deliberately never faked on the MT: it flips every `typeof window === 'undefined'` probe into
+     "browser" (measured: query-core's `isServer` becomes false, the observer attaches during the first-screen render and
+     a fetch is attempted, which dies on the missing `AbortController`). Libraries with a seam use it instead — the
+     router examples pass `origin` to `createRouter`, so `RouterCore` never reads `window?.origin`.
+   - `document`/`localStorage`/`navigator`/`fetch` are not faked either (a fake BOM routes third-party code into DOM
+     branches; on BG `fetch` is assigned inside the wrapper as `fetch = fetch || lynx.fetch`). Reading any of them at
+     module scope throws before `renderPage`.
+2. **Put I/O in `onSettled` or in an effect body.** The MT aliases solid's one-shot server build: `onSettled` is
+   an empty implementation and `createEffect`'s effect body is dropped, so those two **never run** on the MT -
+   which makes fetching, subscribing and registering listeners there thread-agnostic.
+3. **Do not put I/O in any computation.** The MT aliases the server build: the computes of `createMemo`,
+   `createSignal(fn)`, `createStore(fn)` and `createEffect(compute, effect)` all run **at creation** (read or not;
+   the effect body is dropped). Async data therefore never appears on the MT first screen: with no SSR context
+   `<Loading>` renders its fallback once and never re-renders when the promise settles. An async memo the first
+   screen does not need should carry `ssrSource: 'client'` so it is not created on the MT; if the first screen does
+   read it, also give it a `loadingValue` as the seed the MT paints (a bare `ssrSource: 'client'` read during render
+   throws).
+4. **Initial state must be thread-agnostic.** On the MT that means "no data yet": render the loading/empty state.
+   Do not ask which thread you are on - the runtime deliberately exposes **no** `isIfrMainThread()` predicate; a
+   need to branch usually means the code is in the wrong place.
+
+The counter-example for rule 1 is `examples/networking`, which used to read `globalThis.fetch ?? fetch` at module
+scope and blew up the whole MT bundle during evaluation. It now installs `window` **only on the background thread**
+(`__MAIN_THREAD__` folds the block out of the MT copy), so query-core's `isServer` probe stays true on the MT: the
+observer never subscribes and no request is issued there, while the background thread fetches and patches the screen.
+**The fix is moving the read, not adding a compatibility layer.**
+
+**What belongs where.** The runtime supplies the thread contract plus one global: `queueMicrotask`, which the
+framework it hosts cannot live without (solid calls the bare identifier on every mount) — installed on the BG only;
+the MT context has its own. Its own scheduling does not rely on that global — `internal/microtask.ts` talks to
+`lynx.queueMicrotask` directly. **Every other host-surface fill is per app**: `self`, `window` and the API surface gaps
+(`URLSearchParams` — TanStack constructs one at module scope — `URL`, `Headers`, `AbortSignal`) live in
+`examples/*/src/polyfills.ts` (or a library gate like motion's `shim-entry.ts`). Each one carries real weight, and not
+every IFR app needs it; the trap is that a missing fill only fails on device, because the web host has the natives.
+Worklet code counts as app code too: a worklet that reads `queueMicrotask`/`self` bare on a **non-IFR** MT dies there,
+and that is by design — the runtime installs nothing for it.
+
+## If you still want to try
+
+Configuration:
+
+```ts title="rsbuild.config.ts"
+pluginSolidLynx({ enableMtIfr: true })
+```
+
+In this repo the examples read the switch from `LYNX_MT_IFR`, so one config produces both arms:
+`LYNX_MT_IFR=1 nub run -F @lynx-solid/dev-<example> build` writes `dist-ifr/`, plain `nub run … build`
+writes the shipped `dist/`. That is how the embeds below are built — a second build, not a second copy
+of the example.
+
+::: warning Do not alias the runtime yourself
+
+IFR needs exactly **one** instance of `@lynx-solid/runtime` across the whole graph (the
+`@lynx-solid/runtime/lynx-template` subpath counts too). Adding your own alias for either specifier, or
+deep-importing from `dist/`, instantiates the runtime twice — the MT renders into the copy nobody reads,
+**the screen stays blank and nothing throws**, and the first screen silently falls back to a background
+replay. The plugin derives both aliases from one resolved `ifr-runtime`; do not shadow them.
+
+:::
+
+To check what it did on your app, read the main thread's console with the official tooling
+(`npx --yes agent-lynx get-console --thread main`, i.e. through a dev server: on a release build the MT's
+`console` output does **not** reach logcat, so the absence of a line there proves nothing). `match` prints nothing,
+so the line to look for is the fallback:
+
+```
+MT-IFR: the background first batch does not match the main-thread first screen (…); repainting from the background
+```
+
+Read it together with the branch table above. On an **asynchronous** first screen it is expected — the MT had nothing
+to paint, so the BG's batch could never match. On a synchronous one it is the regression signal: counter and todomvc
+match frame for frame, and the day they stop matching, the runtime is being instantiated twice (see the warning above)
+or the app's first screen grew an async dependency.
+
+Reproduce the comparison (the row count is baked in, so each arm is its own build; both bundles are
+served from one directory):
+
+```bash
+# A: no enableMtIfr
+printf 'export const INITIAL_ROWS = 1000\n' > examples/bench-table/src/rows-config.ts
+nub run -F @lynx-solid/dev-bench-table build
+cp examples/bench-table/dist/main.lynx.bundle examples/bench-table/dist/ifr-off.lynx.bundle
+
+# B: add enableMtIfr: true to examples/bench-table/rsbuild.config.ts, rebuild, then
+node packages/benchmark/harness/ab-device.mjs \
+  --serial <device>:<port> --label ifr-1k \
+  --a-url http://<host>:8403/ifr-off.lynx.bundle --a-bundle examples/bench-table/dist/ifr-off.lynx.bundle \
+  --b-url http://<host>:8403/main.lynx.bundle    --b-bundle examples/bench-table/dist/main.lynx.bundle \
+  --reps 7
+```
+
+`ab-device.mjs` alternates one rep of each side so thermal drift cannot land in the comparison, and
+hashes each bundle into its URL so a rebuild can never be served a cached bundle. It keeps the screen
+awake for the length of the run and refuses to measure with the display off — with the display off the
+engine lays out only part of a long screen (the same 1000-row bundle drops from 2.2 s to ~0.6 s) and every
+number still "resolves".
+
+The sweep is the same loop with `INITIAL_ROWS` set to each row count and one window per row count
+(`--label sweep-<rows>`); the row count never changes the bundle size, so the arms stay comparable. To
+confirm the two arms drew the same screen, `adb exec-out screencap` (raw, no `-p`) both loads and diff
+the pixels below the status bar — `screencap -p` cannot be compared byte-wise because the status-bar
+clock changes.
+
+The two devices used here: a Kirin 970 device (2017, Android 10) and a Snapdragon 8 Gen 3 device (2023,
+Android 16); the command below only needs a different `--serial` to rerun on either. It builds both arms
+of every point, measures each in its own window and fits the result:
+
+```bash
+node packages/benchmark/harness/sweep-rows.mjs \
+  --serial <device>:<port> --url http://<host>:8403 --react \
+  --rows 0,25,50,75,100,250,500,1000 --reps 11
+```
+
+`--react` adds the ReactLynx arm (a second demo app); without it the sweep compares only our two paths.
+The fit is taken over `N ≤ 500` (`--fit-max`), because the 500-1000 segment is not linear on any arm —
+including it moves the IFR-vs-ReactLynx crossover by ~40 rows and pushes the intercepts below the
+measured 0-row values, so the script prints the measured 0-row numbers next to the fitted ones.
+
+**What one measurement costs.** The driver measures its own host-side phases, and they are all either the
+app or the process teardown — there is no deliberate wait left:
+
+| phase | what it is | ms/rep |
+| --- | --- | ---: |
+| teardown | `am force-stop` + wait for the pid to disappear | ~320 |
+| launch | `am start -W`: the app coming up (not a wait — the thing being launched) | ~440 |
+| pid poll | waiting for `pidof` to answer after the launch returns | ~100 |
+| frame | waiting for this rep's content line to arrive | 4 at 0 rows, ~3.8 s at 1000 |
+| **per rep** | | **0.86 s at 0 rows, 4.8 s at 1000** |
+
+The lines come from a single `adb logcat` stream held for the whole run, so a rep costs nothing beyond
+waiting for its own lines. The alternative — pulling `logcat -d` per poll — costs ~185 ms per call whatever
+it asks for (`-t 300` 188 ms, `-t 3000` 347 ms), and a rep needs 1-5 of them. That transport also *changed
+the measurement*: pulling every 250 ms during a boot made all three arms 48-115 ms slower at 1000 rows
+because the reads load the device while it boots. The stream ships each line once and the verdict is a device
+timestamp either way, so the numbers do not depend on when a line arrives.
+
+Two rig facts worth knowing when reading a table: the **first launch after the device has been idle for
+minutes is colder** (`LynxShell create` 343 ms against 195 ms, and the default arm's first screen 562 ms
+against 354 ms, while the main-thread arms barely move), which is why windows run back-to-back and a 3-rep
+window started after a pause reads slow on the default arm; and a **hot device is uniformly slower**, which
+is why only same-window Δs are read.
+
+`--phases` prints each rep's marker timeline (`shell`, `LoadTemplate`, `runtime ready`, content frame, and
+the `LoadTemplate → content` tail the mechanism section quotes), computed from the same data as the verdict,
+so the phases can never disagree with the number they explain.
+
+Bundle cost: **+113%** (119 KB → 254 KB, uncompressed; ReactLynx's equivalent bundle is 95 KB).
+
+## The apps, running
+
+Every embed below is the **IFR build** — the same source built with `LYNX_MT_IFR=1`, which is the build the numbers
+above were taken from. Each embed's entry selector carries both arms: `dist/<entry>.lynx.bundle` is the shipped default
+build, `dist/<entry>.ifr.lynx.bundle` is the IFR one, and this page defaults to the latter. They are two builds of one
+`rsbuild.config.ts` (the knob also picks the output directory), not two copies of the example. The Web tab is the same
+bundle either way: the web host has no main thread to paint the first screen on.
+
+<Go example="counter" defaultFile="src/index.tsx" defaultEntryFile="dist/counter.ifr.lynx.bundle" />
+
+<Go example="todomvc" defaultFile="src/index.tsx" defaultEntryFile="dist/todomvc.ifr.lynx.bundle" />
+
+<Go example="7guis" entry="src/counter" defaultFile="src/counter/index.tsx" defaultEntryName="counter" defaultEntryFile="dist/counter.ifr.lynx.bundle" />
+
+<Go example="style-demo" defaultFile="src/index.tsx" defaultEntryFile="dist/style.ifr.lynx.bundle" />
+
+<Go example="tailwind" defaultFile="src/index.tsx" defaultEntryFile="dist/tailwind.ifr.lynx.bundle" />
+
+<Go example="motion" entry="src/Basic" defaultFile="src/Basic/index.tsx" defaultEntryName="basic" defaultEntryFile="dist/basic.ifr.lynx.bundle" />
+
+<Go example="scrolling" entry="src/ScrollViewBasic" defaultFile="src/ScrollViewBasic/index.tsx" defaultEntryName="ScrollViewBasic" defaultEntryFile="dist/ScrollViewBasic.ifr.lynx.bundle" />
+
+<Go example="networking" defaultFile="src/index.tsx" defaultEntryFile="dist/networking.ifr.lynx.bundle" />
+
+<Go example="hackernews" defaultFile="src/index.tsx" defaultEntryFile="dist/hackernews.ifr.lynx.bundle" />
+
+<Go
+  example="elk"
+  defaultFile="src/App.tsx"
+  defaultEntryFile="dist/elk.ifr.lynx.bundle"
+  schema="{{{url}}}?fullscreen=true&bar_color=fafafa&bg_color=fafafa"
+/>
+
+## Related
+
+- [Benchmark](/guide/benchmark-framework) — the instrument conventions this page follows.
+- `tests/behavior/ifr-hydrate.test.ts` — the reconcile taxonomy and the repaint path (Part D).
+- `tests/compiler/ifr-runtime-alias.test.ts` — the one-build-tree invariant for the MT layer.

@@ -1,0 +1,442 @@
+# 主线程脚本
+
+主线程脚本是一种可以在主线程上执行的 JS 脚本。最常见的使用场景是流畅的动画和手势处理。它解决了 Lynx 多线程架构中固有的响应延迟问题，旨在实现接近原生的交互体验。
+
+## Lynx 中的事件响应延迟
+
+下面是一个简单的动画示例：一个跟随 `scroll-view` 同步移动的小方块。在组件中，我们监听滚动事件，从事件参数中获取当前滚动位置，并立即更新方块的位置：
+
+<Go example="main-thread-draggable" defaultFile="src/index.tsx" />
+
+你可以尝试滚动示例左侧的 scroll-view。右侧的蓝色方块会跟随 scroll-view 的移动。但你可能会注意到，它的移动有一个不可预测的延迟，尤其是在性能较低的设备上。随着页面复杂度的增加，这种延迟也会加大。
+
+这是因为在 Lynx 的架构中，事件在主线程上触发，而常规的 JS 事件处理函数只能在后台线程上执行。因此，使用常规事件来触发动画会引入多次线程切换，导致响应不及时，动画落后于手势。
+
+```
+  Without Main Thread Script:
+
+  ┌────────────────┐      ┌────────────────────┐      ┌────────────────┐
+  │  Main Thread   │      │ Background Thread   │      │  Main Thread   │
+  │  (event fires) │ ──▶  │ (Solid handler runs)│ ──▶  │  (render)      │
+  └────────────────┘      └────────────────────┘      └────────────────┘
+          ▲                                                    │
+          └─────────────── 2 thread crossings ─────────────────┘
+```
+
+主线程脚本提供了在主线程上同步处理事件的能力，确保事件响应的同步性。
+
+```
+  With Main Thread Script:
+
+  ┌────────────────────────────────────────────────────────────┐
+  │                       Main Thread                          │
+  │   event fires  ──▶  handler runs  ──▶  render              │
+  └────────────────────────────────────────────────────────────┘
+                      0 thread crossings
+```
+
+## 使用主线程函数消除事件响应延迟
+
+### 使用主线程脚本实现动画
+
+使用主线程脚本同步事件非常简单。这里我们尝试修改前面的示例。
+
+首先，我们通过使用 `main-thread:bindscroll` 属性代替 `bindscroll`，告诉框架我们希望在主线程上处理此事件：
+
+```tsx
+<scroll-view main-thread:bindscroll={onMtsScroll} scroll-y …>
+```
+
+由于 `onMtsScroll` 现在是一个主线程事件处理函数，我们还需要将其声明为主线程函数。方法是在函数体的第一行添加 `'main thread'` 指令（`'main-thread'` 也接受，为别名）：
+
+```ts
+const onMtsScroll = (event: ScrollEvent) => {
+  'main thread'
+  // ...
+}
+```
+
+将其声明为主线程函数后，我们就不能再从后台线程调用它了——主线程函数只能互相调用。
+
+最后，由于我们现在可以直接在主线程上操作元素的属性，因此不需要使用 signal 来改变位置。当使用主线程函数作为事件处理函数时，我们可以通过 `useMainThreadRef()` 获取目标元素的引用，并在主线程函数内通过 `.current` 访问它。这个对象允许你同步获取和设置节点属性，例如在示例中使用 `setStyleProperty()`：
+
+```tsx
+import { render, useMainThreadRef } from '@lynx-solid/runtime'
+
+function App() {
+  const mtDraggableRef = useMainThreadRef<{
+    setStyleProperty: (name: string, value: string) => void
+  } | null>(null)
+
+  const onMtsScroll = (event: ScrollEvent) => {
+    'main thread'
+    const scrollTop = event.detail.scrollTop
+    mtDraggableRef.current?.setStyleProperty(
+      'transform',
+      `translate(${DEFAULT_POS.x}px, ${DEFAULT_POS.y - scrollTop}px)`,
+    )
+  }
+
+  return (
+    <view>
+      <scroll-view main-thread:bindscroll={onMtsScroll} scroll-y …>
+        …
+      </scroll-view>
+      <view main-thread:ref={mtDraggableRef} …>
+        <text>MTDraggable</text>
+      </view>
+    </view>
+  )
+}
+
+render(() => <App />)
+```
+
+以上就是所需的全部修改。`main-thread-draggable` 示例把改前改后的组件并排放置以供比较——滚动左侧面板，对比两个蓝色方块（左侧为主线程版本，右侧为后台版本）。你可能会注意到动画延迟已经消失了！
+
+请注意，`MainThreadRef` 的 `current` 属性只在主线程函数中有意义——在后台线程它只是初始占位值。
+
+## 从后台线程获取数据
+
+你可能已经注意到，将一个函数指定为主线程函数会将其与周围的上下文隔离开来，使其感觉像一个"孤岛"。它的运行时环境与其他函数不同，这意味着它不能自由地与后台线程通信。
+
+然而，在主线程函数中从后台线程获取数据非常简单：直接使用即可，就像普通函数一样。
+
+```tsx
+const red = 'red'
+
+const addBackgroundColor = (event: any) => {
+  'main thread'
+  event.currentTarget.setStyleProperty('background-color', red)
+}
+
+<view main-thread:bindtap={addBackgroundColor}>
+  <text>Hello World!</text>
+</view>
+```
+
+当主线程函数被定义时，它会自动捕获来自后台线程的外部变量，例如上面示例中的 `red` 变量。但是，你不能直接修改后台线程中的值。
+
+主线程函数捕获的值不会实时更新。相反，它们仅在包含主线程函数的组件重新渲染后，才会从后台线程同步到主线程。此外，同步要求捕获的值必须可以使用 `JSON.stringify()` 进行序列化。
+
+总结注意事项：
+
+- 主线程函数只能在主线程上运行。主线程函数之间可以互相调用。
+- 捕获的变量需要通过 `JSON.stringify()` 在线程间传递，因此必须可序列化为 JSON。
+- 主线程函数不支持嵌套定义。
+- 不能在主线程函数中修改从外部作用域捕获的变量。
+- 不要捕获裸 helper 函数：JSON 会静默丢弃它，主线程收到的是 `undefined`。请为 helper 同样添加 `'main thread'` 指令，或经由 `with { runtime: 'shared' }` 共享，或交由编译器内联——否则构建期捕获检查将直接报错。
+
+## 使用 `main-thread:ref` 获取节点对象
+
+在上面的示例中，点击 view 会改变其背景颜色。如果我们只想改变某个特定子元素的颜色，仅靠 `event.target` 和 `event.currentTarget` 不容易实现。在这种情况下，你可以使用 `main-thread:ref` 来获取可在主线程上使用的节点对象。
+
+使用 `useMainThreadRef()` 创建一个 `MainThreadRef`，然后将其赋值给目标节点的 `main-thread:ref` 属性：
+
+```tsx
+import { useMainThreadRef } from '@lynx-solid/runtime'
+
+const red = 'red'
+const textRef = useMainThreadRef(null)
+
+const addBackgroundColor = (event: any) => {
+  'main thread'
+  const el = (textRef as unknown as {
+    current?: { setStyleProperty?(k: string, v: string): void }
+  }).current
+  el?.setStyleProperty?.('background-color', red)
+}
+```
+
+```tsx
+<view main-thread:bindtap={addBackgroundColor}>
+  <text main-thread:ref={textRef}>Hello World!</text>
+  <text>Hello World!</text>
+</view>
+```
+
+请注意，`MainThreadRef` 的 `current` 属性只能在主线程函数中访问。
+
+## 在主线程函数中维护状态
+
+主线程函数不能修改捕获的变量。因此，如果你需要在主线程函数之间维护状态，应该使用 `MainThreadRef`：
+
+```tsx
+const countRef = useMainThreadRef(0)
+
+const bump = () => {
+  'main thread'
+  countRef.current += 1
+}
+```
+
+ref 的 `current` 本体位于主线程，因此对其读写都是同步的，开销很低。
+
+## 跨线程函数调用
+
+到目前为止，示例中使用 `'main thread'` 函数作为事件处理函数。但如果你需要从后台线程调用主线程函数，或者反过来呢？Lynx Solid 提供了 `runOnMainThread()` 和 `runOnBackground()` 来实现双向异步通信。
+
+两个方向合起来就是一次往返。下面两节先分开讲每个方向；之后的 `CounterBox` 示例把两者连起来——点击方块使后台状态加一，effect 再从主线程重绘。
+
+参考流程中，首次布局触发一次往返：
+
+1. **主线程** `handleFirstLayout` 触发，点亮探针并调用 `runOnBackground(reportLayoutRef)()` 使计数器加一
+2. **后台线程** `onSettled` 触发，调用 `runOnMainThread(readMtClock)('ms')` 等待 `pong-from-mt:ms`
+
+### 从后台线程异步调用主线程函数
+
+在后台线程中使用 `runOnMainThread()`，可以异步地在主线程上执行主线程函数。参数必须传入 worklet 函数本身——运行时收到裸函数说明该模块跳过了 worklet 编译，会直接抛出错误而非挂起：
+
+```tsx
+import { onSettled } from 'solid-js'
+import { runOnMainThread } from '@lynx-solid/runtime'
+
+function readMtClock(unit: string) {
+  'main thread'
+  return `pong-from-mt:${unit}`
+}
+
+onSettled(() => {
+  const readClock = runOnMainThread(readMtClock)
+  readClock('ms').then(v => setMtReply(`reply: ${String(v)}`))
+})
+```
+
+参数必须传入 worklet 函数本身——运行时收到裸函数说明该模块跳过了 worklet 编译，会直接抛出错误而非挂起。
+
+一个最小计数器展示了返回值如何流回：
+
+```tsx
+import { runOnMainThread, useMainThreadRef } from '@lynx-solid/runtime'
+
+const countRef = useMainThreadRef(0)
+
+function addCount(value: number) {
+  'main thread'
+  countRef.current += value
+  return countRef.current
+}
+
+async function increaseMainThreadCount() {
+  const result = await runOnMainThread(addCount)(1)
+  console.log(result)
+}
+```
+
+### 从主线程异步调用后台函数
+
+在主线程中使用 `runOnBackground()`，可以异步地在后台线程上执行普通函数。传入 `registerBgFunction` 返回的 handle，而非裸闭包——存活的函数永远不跨越线程边界：
+
+```tsx
+import { registerBgFunction, runOnBackground } from '@lynx-solid/runtime'
+
+const [layoutReports, setLayoutReports] = createSignal(0)
+const reportLayoutRef = registerBgFunction(() => {
+  setLayoutReports(c => c + 1)
+})
+
+function handleFirstLayout() {
+  'main thread'
+  probeRef.current?.setStyleProperty('background', 'lightgreen')
+  runOnBackground(reportLayoutRef)()
+}
+```
+
+```tsx
+<view main-thread:bindlayoutchange={handleFirstLayout} …>
+```
+
+两个方向合起来就是一次往返：点击方块使后台状态加一，effect 再把新值刷回主线程重绘：
+
+```tsx
+import { createEffect, createSignal } from 'solid-js'
+import { registerBgFunction, runOnBackground, runOnMainThread, useMainThreadRef } from '@lynx-solid/runtime'
+
+function CounterBox() {
+  const [count, setCount] = createSignal(0)
+  const boxRef = useMainThreadRef<{
+    setStyleProperty: (k: string, v: string) => void
+  } | null>(null)
+  const incrementCount = registerBgFunction(() => {
+    setCount(c => c + 1)
+  })
+
+  function applyColor(next: number) {
+    'main thread'
+    boxRef.current?.setStyleProperty(
+      'background-color',
+      next % 2 === 0 ? '#4FC3F7' : '#FFB74D',
+    )
+    return next
+  }
+
+  function onTap() {
+    'main thread'
+    runOnBackground(incrementCount)()
+  }
+
+  createEffect(() => count(), (next) => {
+    runOnMainThread(applyColor)(next).then(c => console.log('painted', c))
+  })
+
+  return (
+    <view main-thread:bindtap={onTap} main-thread:ref={boxRef}>
+      <text>Count: {count()}</text>
+    </view>
+  )
+}
+```
+
+1. **主线程** `onTap` 触发，调用 `runOnBackground(incrementCount)()` 更新 signal 状态
+2. **后台线程** `createEffect` 因 `count()` 触发，调用 `runOnMainThread(applyColor)(next)` 重绘方块
+
+## 跨线程共享模块
+
+默认情况下，主线程函数不能直接调用没有 `'main thread'` 指令的普通函数。这使得代码复用变得困难。为了解决这一限制，Lynx Solid 支持共享模块机制，允许你显式声明某些模块可在主线程和后台线程之间共享。
+
+在 `import` 语句后添加 `with { runtime: 'shared' }`，该模块中导出的变量（包括函数、类、对象等）就可以在主线程函数中直接调用：
+
+```ts
+import { func } from './utils' with { runtime: 'shared' }
+
+const onTap = () => {
+  'main thread'
+  func() // ✅ Allows calling plain functions in a main thread function
+}
+```
+
+> [!NOTE]
+> 通过 `with { runtime: 'shared' }` 导入的模块中的函数可以被主线程函数调用，但它们不会被自动视为主线程函数：它们没有自己的 worklet id，不能被*当作*事件处理器或传给 `runOnMainThread`——只能在真正的 worklet 函数*内部*被调用。如果共享函数需要主线程独有的能力（如活的 `MainThreadRef`），不要去标记共享文件本身（它的主线程副本绕过 worklet 编译，标记了也无效）——把 ref 当参数传进去，或像下面 motion 示例那样，在导入模块里用 `'main thread'` 函数包一层。
+
+共享模块是一个普通的 TypeScript/JavaScript 文件——它**不**需要 `'main thread'` 指令。它只能包含纯函数和常量（不能有 Solid 响应式、不能有 DOM 访问、不能有依赖于特定线程的副作用）。样式边不受共享标记影响：共享模块里 `import './x.css'` 照常生效——构建期由可达的图提取成 css asset、统一编码进 template、由引擎应用；样式内容不进任何 JS 包，主线程图不会重复提取。
+
+```ts
+// color-utils.ts — shared between both threads
+const COLORS = ['#4FC3F7', '#81C784', '#FFB74D', '#E57373', '#BA68C8']
+
+export function getNextColor(index: number): string {
+  return COLORS[index % COLORS.length]!
+}
+```
+
+根标记是**唯一需要你手写的信号**，它同时告诉构建两件事：其一，worklet 体内对该导入的引用不进 JSON 快照（照常保持函数身份直达主线程）；其二，该边进入主线程求值链——标了根边的模块进入共享层后，它随后导入的每个模块跟着进入同一层（value、裸副作用、re-export 一视同仁，src 与 node_modules 不分彼此），且不改写任何文件里的任何一条 import。你只写根边，闭包自动跟上；除此之外的机制（信号在图上如何传播）都是构建内部实现，源码里看不到。
+
+> [!NOTE]
+> 根边两种写法都支持：`import … from` 与 `export … from`（barrel 风格）——构建都会识别这条边并把整棵下游图拉进共享层。
+
+两种跨线程调用方式的选择依据：**帧内同步、高频调用**（如手势每帧计算）用共享 import 直接调用；**跨线程异步操作**（如让后台线程保存状态）用 [`runOnBackground()`](#从主线程异步调用后台函数)——它是 RPC，带 JSON 序列化开销，不适合帧内路径。
+
+共享图必须能在主线程端到端求值，因此其中不能出现后台线程专属模块。若确实需要（polyfill 列表、原生桥封装等），给那个模块顶部加上 [ReactLynx](https://github.com/lynx-family/lynx-stack) 同款标记包来"毒化"它——这个做法借鉴自 ReactLynx（Apache-2.0）。共享图一旦触达，构建会带着导入链路直接失败，而不是静默留下一条半可用的边：
+
+```ts
+// polyfills.ts — 仅后台线程
+import 'background-only'
+```
+
+通过 `{ runtime: 'shared' }` 导入后，导出的函数既可以在 `'main thread'` 函数内部调用，也可以在普通的后台线程代码中调用：
+
+```tsx
+import { createMemo, createSignal } from 'solid-js'
+import { useMainThreadRef } from '@lynx-solid/runtime'
+import { getNextColor } from './color-utils' with { runtime: 'shared' }
+
+function ColorBox() {
+  // 后台线程：在 memo 中使用共享函数
+  const [count, setCount] = createSignal(0)
+  const currentColor = createMemo(() => getNextColor(count()))
+
+  // 主线程：在 tap 处理函数中使用同一个共享函数。
+  // 进 worklet 的只有 JSON 值，所以点击计数放在 MainThreadRef 里——
+  // 在这里调后台 signal `count()` 会触发捕获检查（函数永远跨不过线程）。
+  const boxRef = useMainThreadRef(null)
+  const tapCount = useMainThreadRef(0)
+  function onTap() {
+    'main thread'
+    tapCount.current += 1
+    const color = getNextColor(tapCount.current)
+    const el = (boxRef as unknown as {
+      current?: { setStyleProperty?(k: string, v: string): void }
+    }).current
+    el?.setStyleProperty?.('background-color', color)
+  }
+
+  return (
+    <view>
+      <view main-thread:bindtap={onTap} main-thread:ref={boxRef}>
+        <text>Current: {currentColor()}</text>
+      </view>
+      <view bindtap={() => setCount(c => c + 1)}>
+        <text>Bump BG count</text>
+      </view>
+    </view>
+  )
+}
+```
+
+Elk 的 sheet 手势 helper（`src/components/sheet/gesture.ts`）即以此方式共享。
+
+### 引用第三方库
+
+通常，第三方库包含纯 JavaScript 函数。如果在主线程函数中直接调用它们，它们会被当作要 JSON 跨线程的值捕获——而函数跨不过去，于是绑定时抛响亮的 `TypeError`（上游没有这个守卫，会静默变成 `undefined`）。
+
+我们可以使用 `with { runtime: 'shared' }` 将其作为共享模块导入：
+
+```ts
+// 直接导入使用
+import { animate } from 'motion-dom' with { runtime: 'shared' }
+
+const onScroll = () => {
+  'main thread'
+  // 可以在主线程函数中直接调用
+  animate(element, { opacity: 0 })
+}
+```
+
+上面这些都有可跑的版本，见 [Motion](/zh/guide/motion)：真实第三方包（`motion-dom` 纯数值子集）共享导入、驱动点击回弹方块，以及元素动画为什么需要 DOM 适配器。
+
+为了方便复用或避免下面的[限制](#限制)（例如赋值后丢失共享特性），建议将导入**封装**在主线程函数中：
+
+```ts
+// src/utils/motion.ts
+// 1. Import the original function as shared
+import { animate as _animate } from 'motion-dom' with { runtime: 'shared' }
+
+// 2. Export a new main thread function for encapsulation
+export function animate(...args: any[]) {
+  'main thread'
+  return _animate(...args)
+}
+```
+
+这样，`animate` 就变成了一个标准的主线程函数，可以在任何主线程函数中自由使用，不再受静态分析的限制：
+
+```tsx
+import { animate } from './utils/motion'
+
+const onTap = () => {
+  'main thread'
+  // 标准主线程函数——可自由赋值或传递
+  const myAnimate = animate
+  myAnimate(element, { x: 100 })
+}
+```
+
+### 限制
+
+只有通过 `import` 直接导入的标识符才会被识别为"共享"的。赋值给新变量会导致其丢失共享特性：
+
+```ts
+import { func } from './utils' with { runtime: 'shared' }
+const anotherFunc = func // [!code error]
+
+const onTap = () => {
+  'main thread'
+  anotherFunc() // ❌ 不是登记在册的共享名：会被抓去 JSON 跨线程，绑定时抛 `TypeError: Cannot send "anotherFunc" across threads…`
+}
+```
+
+### 状态隔离
+
+**共享模块中的变量和状态在两个线程之间完全隔离，各自拥有独立的实例。**依赖图会包含被引用的共享模块，但**产物按实际使用裁剪**——只被主线程函数使用的模块会在后台线程产物中被摇树移除（按需打包），两边都会真实使用的模块才各保留一份。没有共享内存也没有同步原语，隔离是架构使然。
+
+这意味着，如果你在主线程上修改了共享模块中的变量，后台线程无法感知到，反之亦然。共享模块解决的是"代码共享"的问题，而不是"状态共享"的问题。

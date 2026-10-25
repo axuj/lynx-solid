@@ -1,0 +1,22 @@
+{
+  "extends": "../../config/tsconfig/base.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "@lynx-solid/runtime",
+    "lib": ["ES2022", "DOM"],
+    // `"paths": {}` clears base.json src aliases on purpose: rspack dev
+    // reads the nearest tsconfig.json for path mapping, and src aliases
+    // would split the runtime singleton (blank page, zero errors).
+    "paths": {},
+    "types": ["vite/client"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true
+  },
+  "include": [
+    "src",
+    "../../packages/runtime/src/internal/globals.d.ts",
+    "../../packages/runtime/src/internal/papi.d.ts"
+  ]
+}

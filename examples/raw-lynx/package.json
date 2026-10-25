@@ -1,0 +1,25 @@
+{
+  "name": "@lynx-solid/dev-raw-lynx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "rsbuild build"
+  },
+  "dependencies": {
+    "@lynx-js/runtime-wrapper-webpack-plugin": "catalog:",
+    "@lynx-js/template-webpack-plugin": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "nub",
+      "version": "^0.9.2",
+      "onFail": "ignore"
+    }
+  },
+  "devDependencies": {
+    "@lynx-js/rsbuild-plugin": "catalog:",
+    "@rsbuild/core": "catalog:",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,8 @@
+# Generated files must stay LF on all platforms.
+# The TanStack generator always emits LF (prettier default, no endOfLine
+# option), while Windows checkouts with core.autocrlf=true land as CRLF —
+# that mismatch makes writeIfDifferent rewrite every dev run and leaves a
+# stat-dirty M with an empty diff. Pinning eol=lf keeps checkout and output
+# identical so regeneration becomes a no-op.
+**/routeTree.gen.ts text eol=lf
+compile-lab/file-routes.d.ts text eol=lf

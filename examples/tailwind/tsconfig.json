@@ -1,0 +1,27 @@
+{
+  "extends": "../../config/tsconfig/base.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "@lynx-solid/runtime",
+    "lib": ["ES2022", "DOM"],
+    // `"paths": {}` clears base.json src aliases on purpose: rspack dev
+    // reads the nearest tsconfig.json for path mapping, and src aliases
+    // would split the runtime singleton (blank page, zero errors).
+    // Types resolve via workspace symlink -> dist .d.ts, so typecheck
+    // needs a prior runtime build (the root chain runs it first).
+    "paths": {},
+    // Device/web targets, never node: excluding @types/node keeps the DOM
+    // timer signatures (setTimeout -> number), matching on-device behavior.
+    // Mirrors compile-lab's types scoping.
+    "types": ["vite/client"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true
+  },
+  "include": [
+    "src",
+    "../../packages/runtime/src/internal/globals.d.ts",
+    "../../packages/runtime/src/internal/papi.d.ts"
+  ]
+}

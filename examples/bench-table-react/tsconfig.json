@@ -1,0 +1,17 @@
+{
+  "extends": "../../config/tsconfig/base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@lynx-js/react",
+    "lib": ["ES2022", "DOM"],
+    // Cleared like the other examples: rspack dev reads the nearest
+    // tsconfig for path mapping; src aliases would be wrong here anyway
+    // (this app is plain ReactLynx, no @lynx-solid/* runtime).
+    "paths": {},
+    "types": ["vite/client"],
+    "noEmit": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true
+  },
+  "include": ["src", "rsbuild.config.ts"]
+}

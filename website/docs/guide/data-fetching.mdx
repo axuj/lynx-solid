@@ -1,0 +1,244 @@
+# Data Fetching
+
+Lynx provides the [Fetch API](https://lynxjs.org/next/api/lynx-api/global/fetch) for network requests. Solid 2's async
+model is: **any computation that returns a Promise is an async data source**. `<Loading>` owns the not-ready state,
+`<Errored>` owns failures, and `createResource` is gone in 2.0 — you do not need hand-written loading / error triples.
+
+That is enough for a fetch-and-render. When you also want a **cache** (dedupe, stale-while-revalidate, pagination),
+reach for a query library: `@tanstack/solid-query` v6 is the Solid 2 port of TanStack Query and the `networking`
+example below uses it.
+
+See also: [Lynx — Networking](https://lynxjs.org/next/guide/interaction/networking.html)
+
+<Go example="networking" defaultFile="src/index.tsx" />
+
+## Async computation + `<Loading>`
+
+```tsx title="src/index.tsx"
+import { createMemo, Errored, For, Loading } from 'solid-js'
+
+const users = createMemo(async () => {
+  const res = await fetch('https://jsonplaceholder.typicode.com/users')
+  if (!res.ok)
+    throw new Error('Failed to fetch users')
+  return (await res.json()) as User[]
+})
+```
+
+Reading `users()` before it is ready suspends, so the reader lives under a `<Loading>` boundary:
+
+```tsx
+<Errored fallback={(err, reset) => <text bindtap={reset}>Failed: {String(err())} — tap to retry</text>}>
+  <Loading fallback={<text>Loading users...</text>}>
+    <For each={users()}>
+      {user => <UserCard user={user} />}
+    </For>
+  </Loading>
+</Errored>
+```
+
+`<Loading>` replaces `<Suspense>` and `<Errored>` replaces `<ErrorBoundary>` (`reset` re-runs the failing sources). Use
+`<Reveal>` when sibling boundaries should reveal in a coordinated order.
+
+## Dependent reads
+
+Put the dependency inside the compute — reading it is what tracks. No `createEffect`, no manual clearing of stale data:
+
+```tsx
+const posts = createMemo(async () => {
+  const id = selectedUserId()
+  if (id === null)
+    return [] as Post[]
+  const res = await fetch(`https://jsonplaceholder.typicode.com/users/${id}/posts`)
+  return (await res.json()) as Post[]
+})
+```
+
+When the selection changes the compute re-runs and `<Loading>` falls back again. To tell "first load" from "a new value
+is in flight", read `isPending(() => posts())` inside the boundary; to peek at the value being replaced, use `latest(id)`.
+
+## A query cache: `@tanstack/solid-query`
+
+v6 is written for Solid 2 (peer `solid-js >=2.0.0-rc.6`) and its `data` read is a suspending read, so it plugs into the
+same `<Loading>` / `<Errored>` boundaries. The difference is the **cache**: the query cache is the source of truth, and
+mutations write into it.
+
+```tsx title="src/index.tsx"
+import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/solid-query'
+import { createOptimistic } from 'solid-js'
+
+const client = new QueryClient()
+
+function App() {
+  const queryClient = useQueryClient()
+
+  const users = useQuery(() => ({
+    queryKey: ['users'],
+    queryFn: async (): Promise<User[]> => (await fetch('https://jsonplaceholder.typicode.com/users')).json(),
+  }))
+
+  const posts = useQuery(() => ({
+    queryKey: ['posts', selectedUserId()],
+    enabled: selectedUserId() !== null,
+    queryFn: async (): Promise<Post[]> => (await fetch(`…/users/${selectedUserId()}/posts`)).json(),
+  }))
+
+  // Optimistic layer: a `createOptimistic` overlay, written inside the
+  // mutation. The mutation rides an `action`, so the overlay is visible
+  // immediately and dropped when the transition settles — on failure that IS
+  // the rollback. No snapshot, no context: v6 does not hand one to the
+  // callbacks.
+  const [pendingRemoval, setPendingRemoval] = createOptimistic<number[]>([])
+
+  const deletePost = useMutation(() => ({
+    mutationFn: async (postId: number) => {
+      const res = await fetch(`…/posts/${postId}`, { method: 'DELETE' })
+      if (!res.ok)
+        throw new Error('Failed to delete post')
+      return postId
+    },
+    onMutate: (postId: number) => {
+      setPendingRemoval(prev => [...prev, postId]) // transient
+    },
+    onSuccess: (_result, postId) => {
+      // Durable: jsonplaceholder never persists the DELETE, so the cache is
+      // updated here. A real backend would instead invalidate and refetch.
+      queryClient.setQueryData<Post[]>(['posts', selectedUserId()], old => old?.filter(p => p.id !== postId) ?? [])
+    },
+  }))
+
+  // The list is the cache plus the overlay.
+  const visiblePosts = createMemo(() => {
+    const list = posts.data
+    const pending = pendingRemoval()
+    return pending.length === 0 ? list : list.filter(p => !pending.includes(p.id))
+  }, { lazy: true })
+}
+```
+
+The options are an **accessor**: re-running it with a new `queryKey` is a new query, so a dependent read needs no
+effect and no manual clearing of the old list.
+
+**This is not the v5 (React/Vue) optimistic pattern.** There, the mutation writes the cache up front, snapshots it and
+restores the snapshot in `onError`. v6 is built on Solid 2's primitives instead: a mutation is one `action` transaction,
+the flight state *is* a `createOptimistic` overlay, and the caller's own overlay written in `onMutate` follows the same
+rule — visible now, dropped at settle. (v6 also hands the callbacks no context: the third argument of `onSuccess` and
+`onError` is `undefined`, so the v5 snapshot/restore plumbing has nowhere to travel.) So the split is:
+
+- **transient** — the `createOptimistic` overlay (reverts on failure, by the engine);
+- **durable** — the cache, written when the request succeeded (a real backend would answer with the row gone, so the
+  cache would be updated by a refetch instead).
+
+Measured on device: the row disappears on tap and stays gone after the request succeeds; with the request pointed at a
+404 the row comes back on its own a moment later.
+
+Cost: the library is not small. In the `networking` example it adds **+107 KB** to the bundle (110 KB → 217 KB). Pay for
+it only when you need the cache. That example runs on the **default path** — a query library cannot serve a main-thread
+first screen (see the IFR section below).
+
+## What the library needs from the host
+
+TanStack Query is browser-shaped; Lynx is not. One gap, filled in the example's `src/polyfills.ts`:
+
+- **`window`** — the library detects the environment with `typeof window === 'undefined'`. On the background thread that
+  name is a wrapper parameter (undefined on device), so the library took its **SSR path**: it never subscribed to the
+  cache, and an optimistic `setQueryData` never reached the UI (measured: the cache held 9 rows while the view still
+  rendered 10). Install a `window` global *and* sync the wrapper-scope binding — the bare `window` identifier inside
+  bundle code resolves to the parameter, not to `globalThis`.
+
+  **Import order matters.** The library reads `typeof window` at *module scope*, so the polyfill has to be evaluated
+  before the library is: `import './polyfills'` first, the library second — import order is evaluation order.
+
+  ```tsx title="src/index.tsx"
+  import { render } from '@lynx-solid/runtime'
+  // Must be evaluated BEFORE the query library: it reads `typeof window` at
+  // module scope, and the background thread's `window` is undefined until the
+  // polyfill rebinds it.
+  import './polyfills'
+  import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/solid-query'
+  ```
+
+`AbortController` / `AbortSignal` need nothing: the background thread has them natively. The main thread does not — see
+below.
+
+## First screen and the IFR constraint
+
+With [`enableMtIfr`](/guide/mt-ifr) on, the first screen is evaluated on the **main thread** against solid-js's **server
+build**, and the main thread has no `fetch` (deliberately — see the [thread
+contract](/guide/mt-ifr#what-first-screen-code-may-assume)).
+
+**A query library can be evaluated on the main thread, but it must not fetch there.** The mechanism is the environment
+probe, not the read: `useQuery` is a hook, so the query object exists on the main thread too — but query-core decides
+whether it runs on a server with `typeof window === 'undefined'` (`query-core/utils.js:3`). The main thread deliberately
+has no `window` (the runtime installs no browser-shaped global; apps fill their own, see [MT-IFR](/guide/mt-ifr)), so the observer never subscribes and no
+request is issued. Faking `window` there flips that probe: the observer attaches during the first-screen render, a fetch
+is attempted, and it dies on the missing `AbortController` (query-core builds one per Query instance, `query.js:211`) —
+the rejection is swallowed. Measured on the `networking` example.
+
+Keeping the read **inside a `<Loading>` boundary** is still what paints the shell: on the main thread the boundary shows
+its fallback, and the data comes from the background thread, which installs `window` itself (the example's
+`polyfills.ts`, gated by `__MAIN_THREAD__`) so the query is live there.
+
+The same rule applies to any browser-shaped library: give it a seam instead of a fake global. The router examples pass
+`origin` to `createRouter`, which is why `RouterCore` never reads `window?.origin` on the main thread
+(`router-core/router.js:121-122`).
+
+So an app that wants a main-thread first screen keeps the **native async model** for the first screen when the content
+itself has to be there, and uses a query library when a shell is acceptable. For the native model, the main thread must not
+*create* the computation — `ssrSource: 'client'` does that, and a `loadingValue` gives it a seed to paint:
+
+```tsx
+const posts = createMemo(
+  async () => fetchPosts(selectedUserId()),
+  { ssrSource: 'client', loadingValue: [] },
+)
+```
+
+A bare `ssrSource: 'client'` that is read during render throws (it marks a client-only hole), so either keep it out of
+the first screen or supply `loadingValue`.
+
+The same rule bites hand-written computations:
+
+1. **Every computation runs at creation** — `createMemo(async () => …)` has already started the request before
+   `createMemo` returns, read or not.
+2. **With no SSR context `<Loading>` renders its fallback once** and never re-renders when the promise settles, so async
+   data can never appear on the main-thread first screen.
+
+## Optimistic updates without a query library
+
+`createOptimistic` is Solid 2's own optimistic layer: writes made inside an `action` show immediately and revert on
+their own if the request throws.
+
+```tsx
+const [pendingRemoval, setPendingRemoval] = createOptimistic<number[]>([])
+
+const deletePost = action(function* (postId: number) {
+  setPendingRemoval(prev => [...prev, postId]) // optimistic
+  const res = yield fetch(`…/posts/${postId}`, { method: 'DELETE' })
+  if (!res.ok)
+    throw new Error('Failed to delete post')
+})
+```
+
+Where the written value lives matters: the optimistic layer only lives for the transition, and when it settles the list
+is re-derived from its source. If that source still returns the row, the row comes back — a real backend returns it
+gone; a mock API does not, so keep the removal in the source yourself (an id list the source filters on) and re-derive
+with `refresh(source)`.
+
+For a whole collection there is also `createOptimisticStore(fn, seed)` — a projection with the same revert rule. It
+pulls Solid's store/reconcile machinery into the bundle (+43.8 KB in this example), so reach for it when the collection
+really is a store.
+
+- Fields the server also changes: mark them pending with `affects(post, 'updatedAt')`.
+- Process affordances ("saving…") are a co-written `createOptimistic(false)` flag, not `isPending` (`refresh()` quietly
+  re-asks the same question and never reads as pending by itself).
+
+## Caching and pagination
+
+Beyond simple reads — caching, background refresh, pagination — see HackerNews' `use-hn-query` helper (module-level
+cache with expiry and in-flight de-duplication) and Elk's masto.js paginator (`pages()` + `<Loading>`).
+
+## Examples
+
+- [HackerNews](/guide/hackernews) — feed and thread requests, route-level loading state
+- [Elk](/guide/elk) — masto.js timelines, pagination and settings persistence

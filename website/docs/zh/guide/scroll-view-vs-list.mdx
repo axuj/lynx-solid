@@ -1,0 +1,268 @@
+# scroll-view 与 list
+
+Lynx 不像 Web 那样随便滚任意节点。内容超出视口时必须选显式滚动容器——几乎总是 [`<scroll-view>`](https://lynxjs.org/zh/api/elements/built-in/scroll-view) 或 [`<list>`](https://lynxjs.org/zh/api/elements/built-in/list)。本页讲 Lynx 文档怎么区分两者、这与 Web 上的 Solid 有什么不同，以及由此产生的 Lynx Solid 设计模式。
+
+平台侧参考见 lynxjs.org 的[管理滚动](https://lynxjs.org/zh/guide/ui/scrolling)。
+
+## Lynx vs Web
+
+Web 上几乎任何元素都能变滚动视口：
+
+```html
+<div style="overflow: auto; height: 100vh">
+  <!-- anything -->
+</div>
+```
+
+Lynx 里裸 `<view>` **不会**因为 `overflow: scroll` / `overflow: auto` 获得滚动。只有 `<scroll-view>`、`list` 这类专用容器能滚。从 DOM 切到 Lynx 的第一个设计转变：滚动是模板里的**结构**决策，不是事后撒的 CSS 属性。
+
+| | Web（Solid） | Lynx（Lynx Solid） |
+|---|---|---|
+| 滚动怎么来 | 任意节点 `overflow` | 专用 `<scroll-view>` / `<list>` |
+| 虚拟化 | 可选库（TanStack Virtual……） | `<list>` 内建 |
+| 长 feed | 自己做窗口 + 回收 DOM | 原生回收 + 懒创建 |
+| 复杂网格 | CSS Grid / 瀑布流库 | `<list list-type="flow\|waterfall">` |
+
+Lynx Solid 保留 signal、`<For>`、函数组件——但滚动树的形状和 Vite SPA 不一样。
+
+## lynxjs.org 怎么说
+
+Lynx 滚动指南把两个容器划得很清：
+
+1. **`<scroll-view>` 管基础滚动**——固定视口；子元素超了就设 `scroll-orientation` 为 `vertical` 或 `horizontal`。
+2. **`<list>` 管大/无限数据**——只按需创建可见项。
+3. **`<list>` 管复杂布局**——`scroll-view` 只会线性；`list` 多了 `single`、`flow`、`waterfall`。
+
+[`<scroll-view>` API](https://lynxjs.org/zh/api/elements/built-in/scroll-view) 还警告：
+
+- 所有子元素 upfront 全建（伤首屏）。
+- **不复用**；内容太多会爆内存。
+- 超过三屏就换 `<list>`，或用曝光事件伪造回收。
+
+可以这么记：`<scroll-view>` 是"恰好能滚的短页面"，`<list>` 是"带回收的 feed"。
+
+## 怎么选
+
+| 问题 | 选 `<scroll-view>` | 选 `<list>` |
+|---|---|---|
+| 内容多少？ | 几屏以内 | 很多屏 / 无界 |
+| 布局 | 线性堆 | 单列 / 网格（`flow`）/ 瀑布流 |
+| 项形状 | 混合区块、吸顶 chrome | 同构（或基本同构）cell |
+| 内存 | 全量常驻 | 回收 + 懒加载 |
+| 无限加载 | 能做，但悬 | 原生 `bindscrolltolower` |
+
+Lynx 的经验法则：**三屏以内 → `scroll-view`，以外 → `list`。**
+
+## Solid 里的 `<scroll-view>`
+
+子元素就是普通 Solid 写法——`<For>`、嵌套组件、吸顶兄弟节点，包进 `<scroll-view>` 即可，无他。
+
+<Go
+  example="scrolling"
+  defaultFile="src/ScrollViewBasic/index.tsx"
+  entry="src/ScrollViewBasic"
+  defaultEntryName="ScrollViewBasic"
+/>
+
+```tsx
+<scroll-view scroll-orientation="vertical">
+  <view class="header">…</view>
+  <For each={cards()}>
+    {card => (
+      <view class="card">
+        <text>{card.title}</text>
+      </view>
+    )}
+  </For>
+</scroll-view>
+```
+
+适合：设置页、表单、文章正文、短结果页（另见[数据请求](/zh/guide/data-fetching)、[TodoMVC](/zh/guide/todomvc)）。
+
+:::tip 嵌套布局提示
+`<scroll-view>` 的直接子元素只支持线性 / 吸顶布局。滚动视口里想要更丰富的 CSS，就在里面再包一层 `<view>` 做子树样式——[scroll-view 文档](https://lynxjs.org/zh/api/elements/built-in/scroll-view)也是这么建议的。
+:::
+
+## Solid 里的 `<list>`
+
+`<list>` 只收 **`<list-item>` 子元素**。每项需要 Lynx 的 `item-key`——原生回收器的身份标识。（Solid 没有 `key` 属性；后台线程靠 `<For>` 按引用跟踪行，原生侧靠 `item-key` 认行。缺失或碰撞的 `item-key` 是 cell 空白/错位的常见原因。）
+
+<Go
+  example="scrolling"
+  defaultFile="src/ListBasic/index.tsx"
+  entry="src/ListBasic"
+  defaultEntryName="ListBasic"
+/>
+
+```tsx
+<list list-type="single" scroll-orientation="vertical">
+  <For each={cards()}>
+    {card => (
+      <list-item
+        item-key={card.id}
+        estimated-main-axis-size-px={96}
+      >
+        <view class="card">…</view>
+      </list-item>
+    )}
+  </For>
+</list>
+```
+
+`estimated-main-axis-size-px` 帮引擎在 cell 量出尺寸前先算滚动条和跳转位置。
+
+### 瀑布流 / flow 布局
+
+这是 lynxjs.org 区分的另一半：`scroll-view` 做不了多列 masonry，`list` 可以。
+
+<Go
+  example="scrolling"
+  defaultFile="src/ListWaterfall/index.tsx"
+  entry="src/ListWaterfall"
+  defaultEntryName="ListWaterfall"
+/>
+
+```tsx
+<list list-type="waterfall" span-count={2} scroll-orientation="vertical">
+  <For each={tiles()}>
+    {tile => (
+      <list-item
+        item-key={tile.id}
+        estimated-main-axis-size-px={tile.height}
+      >
+        <view class="tile" style={{ height: `${tile.height}px` }} />
+      </list-item>
+    )}
+  </For>
+</list>
+```
+
+每个 `list-item` 里可以装完整组件子树——Elk 时间线的 `StatusCard` 就是产品级的同构。
+
+## 由此产生的 Solid 设计模式
+
+从 Web Solid 迁到 Lynx Solid，响应式模型不变——变的是**滚动放在哪里**，以及**谁负责回收**。
+
+### 1. 在模板里显式声明容器
+
+不要再给根 `<view>` 写 `overflow: auto`。先想清楚：
+
+```tsx
+{/* 短而杂的页面 */}
+<scroll-view scroll-orientation="vertical">…</scroll-view>
+
+{/* 长而同构的 feed */}
+<list list-type="single" scroll-orientation="vertical">…</list>
+```
+
+这个结构选择，相当于在 Web 上决定要不要上虚拟列表库。
+
+### 2. 双重身份：`<For>` 引用 + `item-key`
+
+Web 的 `<For>` 只要引用稳定。Lynx 的 list 还要 `item-key`。用同一个稳定业务 id：
+
+```tsx
+<list-item
+  item-key={status.id}
+/>
+```
+
+[Elk](/zh/guide/elk) 的 Mastodon 状态流走的正是这个契约。
+
+### 3. Helper 管分页；`<list>` 管回收
+
+在 Web 上，无限滚动通常是：
+
+数据 helper **+** 虚拟化库 **+** 交叉观察哨兵。
+
+在 Lynx 里可以去掉虚拟化。helper 往 signal 数组后追加；`bindscrolltolower`（配 `lower-threshold-item-count`）请求下一页。原生回收保证内存平稳。
+
+<Go
+  example="scrolling"
+  defaultFile="src/ListInfinite/index.tsx"
+  entry="src/ListInfinite"
+  defaultEntryName="ListInfinite"
+/>
+
+```ts
+// shared/useInfiniteFeed.ts
+export function useInfiniteFeed(pageSize = 20) {
+  const [items, setItems] = createSignal<Card[]>(makeCards(pageSize))
+  const [loading, setLoading] = createSignal(false)
+  // loadMore() 追加一页…
+  return { items, loading, loadMore }
+}
+```
+
+```tsx
+<list
+  lower-threshold-item-count={3}
+  bindscrolltolower={() => { void loadMore() }}
+>
+```
+
+### 4. 变更演示
+
+| 入口 | 变更 | 说明 |
+|---|---|---|
+| `ListPrepend` | 前插 vs 后插 | Prepend 后顶部 cell 必须变红 |
+| `ListReorder` | Yellow 置顶 / 反转 | 色条与 list 必须同序 |
+| `ListRemove` | 删除 + 同 key Reset | 不得报重复 item-key |
+| `ListFilter` | 偶数过滤切换 | 轻量回归 |
+
+### Prepend
+
+点一次 **Prepend**。列表**最顶部**必须变成红色 `NEW …`。**Append** 落在底部。
+
+<Go
+  example="scrolling"
+  defaultFile="src/ListPrepend/index.tsx"
+  entry="src/ListPrepend"
+  defaultEntryName="ListPrepend"
+/>
+
+### Reorder
+
+四个满宽色块。上方色条是普通 `<view>`（Solid 真相带）。下方 `<list>` 在 **Yellow 置顶**或**反转**之后必须与色条**同序**。
+
+<Go
+  example="scrolling"
+  defaultFile="src/ListReorder/index.tsx"
+  entry="src/ListReorder"
+  defaultEntryName="ListReorder"
+/>
+
+### Remove + filter
+
+**Remove**：先删行，再 **Reset same keys**——不得再弹出重复 item-key。Filter 切换作更轻的回归。
+
+<Go
+  example="scrolling"
+  defaultFile="src/ListRemove/index.tsx"
+  entry="src/ListRemove"
+  defaultEntryName="ListRemove"
+/>
+
+<Go
+  example="scrolling"
+  defaultFile="src/ListFilter/index.tsx"
+  entry="src/ListFilter"
+  defaultEntryName="ListFilter"
+/>
+
+## 决策清单
+
+1. 页面基本是一份线性文档、大约三屏以内？→ **`<scroll-view>`**
+2. 要渲染几十 / 上百条相似行？→ **`<list>`**
+3. 需要瀑布流或多列 flow？→ **`<list list-type="…">`**
+4. 数据集会无限增长？→ **`<list>` + helper + `bindscrolltolower`**
+5. `item-key` 是否稳定唯一？→ 正确回收所必需
+6. 需要前插 / 重排 / 删除？→ 用探针页验证
+
+## 延伸阅读
+
+- [管理滚动（Lynx）](https://lynxjs.org/zh/guide/ui/scrolling)
+- [`<scroll-view>` API](https://lynxjs.org/zh/api/elements/built-in/scroll-view)
+- [`<list>` API](https://lynxjs.org/zh/api/elements/built-in/list)
+- [Elk（Mastodon 客户端）](/zh/guide/elk) —— 时间线 feed 的原生 `<list>`
+- [主线程脚本](/zh/guide/main-thread-script) —— `<scroll-view>` / `<list>` 上的滚动联动 worklet

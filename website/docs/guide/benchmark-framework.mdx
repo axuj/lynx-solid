@@ -1,0 +1,137 @@
+# Benchmark
+
+> **All numbers on this page come from a real device.** These instruments measure shipped bundles and device behavior — there is no browser-side measurement here.
+
+Two axes, both cheap to re-run: **how wide is the bundle**, and **how long until content is on screen**.
+
+> Every figure below comes from one device, one build configuration and one LAN setup, so treat the absolute
+> numbers as indicative rather than universal — different hardware and network conditions will move them.
+> ReactLynx is included only as a calibration baseline: a mature dual-thread Lynx renderer to scale the byte
+> counts against, not a competitor being ranked.
+
+## Try it yourself
+
+Tap the buttons below — this is the workload the size and cold-open tables are built from. The table starts empty: press **Create 1,000 rows** first, then Update every 10th, tap rows to select, x to delete.
+
+<Go example="bench-table" defaultFile="src/index.tsx" />
+
+## Subjects under test
+
+One js-framework-benchmark-style table workload, two **idiomatic** implementations (isomorphic to vue-lynx-vapor's ui-vdom/ui-react — the vapor branch of [vue-lynx](https://github.com/Huxpro/vue-lynx), Apache-2.0):
+
+| | lynx-solid | ReactLynx |
+|---|---|---|
+| State | `createStore` draft mutations (fine-grained signals) | `useState` immutable replacement + `memo(Row)` |
+| List | `<For>` keyed by reference | `key={id}` + preact diff |
+| Entry | `examples/bench-table` | `examples/bench-table-react` |
+
+Both share a byte-identical DOM contract (`.rows` / `.row` / `.danger` / `.col-label` / `.btn-text`).
+
+**ReactLynx is the reference frame**, not the subject: it calibrates "what a mature dual-thread framework ships in bytes".
+
+## Instruments
+
+| Instrument | Question | Scale |
+|---|---|---|
+| Offline size census (`sweep:examples`) | How wide is the shipped artifact? | pure `fs` + `zlib`, no host at all |
+| Device cold open (`sweep:device`) | How long until content is on screen? | Android device, Explorer + LAN + dual-thread eval + render |
+| Device selftest (`test:device`) | Does it behave on the native host? | Android device, 6 behavioral assertions |
+
+Nothing here is a browser measurement. **Do not ratio across instruments** — bytes are not milliseconds, and a cold open includes Explorer launch and a LAN fetch that no other tier contains.
+
+## Bundle size
+
+`nub run -F @lynx-solid/benchmark sweep:examples` — offline scan of `examples/*/dist`, **33 entries** (32 with a web preview pair + `raw-lynx`, which has no web target).
+
+| | lynx gzip | lynx raw |
+|---|---|---|
+| smallest | **7,993** (`raw-lynx`) | 15,075 |
+| median | **38,380** | — |
+| largest | **152,325** (`elk`) | 484,690 |
+
+`mini-pure` sits at 15,731 gzip — the floor for a web-paired entry; everything else starts around 33,500.
+
+The `web gzip` column in the raw table is the **docs-preview payload**, not a runtime cost — the web target exists so `<Go>` and `compile-lab` can preview, and it is not what a device downloads.
+
+Reference pair (same run, same instrument):
+
+| bundle | lynx raw | lynx gzip | web gzip |
+|---|---|---|---|
+| `bench-table` (solid) | 121653 | 47034 | 40808 |
+| `bench-table-react` (ReactLynx) | 97740 | **41055** | 32791 |
+
+Solid ships **1.15×** ReactLynx's gzip here — up from 1.04× on the rc.6 run, because the Solid arm moved to solid-js 2.0 rc.18 and the ES2017 device baseline while the ReactLynx arm is unchanged.
+
+> Neither bundle contains polyfills: the device runtime baseline is ES2020 built-ins plus engine APIs (`queueMicrotask` comes from an entry shim). This is asserted by `tests/behavior/device-baseline.test.ts`, which scans the source for `core-js` and ES2021+ gaps.
+
+## Cold open → content
+
+`nub run -F @lynx-solid/benchmark sweep:device` — **33/33 ok, 0 DNF, 0 errors**, a Snapdragon 8 Gen 3 Android device (Android SDK 36), 3 reps each, median.
+
+Method: `am force-stop com.lynx.explorer` → `logcat -c` → `lynx://open?url=…` → poll two independent channels:
+- **logcat** (33/33 rows this run) — engine milestone `__OnAppFirstScreen`, priority-ordered against `OnPatchFinishForFiber` / `__OnNativeAppReady`, host/device clocks aligned per entry (`clockOffset` 2475 ms this run)
+- **screencap** (fallback, unused this run) — PNG content score over the 8–92% band, ignoring the 600 ms explorer window transition
+
+`open → content` therefore **includes Explorer cold start + LAN bundle fetch + BG eval + render + IPC apply**. It is not a framework render time.
+
+| | ms |
+|---|---|
+| median | **346** |
+| min / max | 309 / 479 |
+| slowest | `motion/spring` 479, `scrolling/ListFilter` 475, `scrolling/ListReorder` 449 |
+| fastest | `counter` 309, `motion/motion-value` 309, `7guis/temperature-converter` 316 |
+
+All 33 entries land in a **309–479 ms** band — a ~1.5× spread across a 17× bundle-size range, i.e. cold-open time here is dominated by Explorer launch and the LAN fetch, not by how big the bundle is or which framework ships it.
+
+### Flagged rows — do not quote without re-running
+
+`harness/sweep-device.mjs` emits these automatically into the report's `notes` column (`rowNotes()`), computed from the bundle bytes and the two channels rather than footnoted by hand:
+
+- **mini-pure** — `screencap` returned null on all 3 reps. 313 ms is *engine milestone reached*, not *content visible*, which is why it must not be quoted as the fastest entry.
+
+**Non-production bundles are rejected before they can be measured.** `prepare-examples` hard-blocks a `dist/` that carries dev-build markers, and `rowNotes()` re-detects the same class from the bundle bytes, so a regressed run flags itself instead of passing silently.
+
+Full table: [`results/examples-sweep-device.md`](https://github.com/lynx/lynx-solid/tree/main/packages/benchmark/results/examples-sweep-device.md)
+
+## Device selftest
+
+`nub run -F @lynx-solid/benchmark test:device` — a Snapdragon 8 Gen 3 Android device, all cases green. `open → content` **415 ms**, page-internal rendered mark **51 ms** (BG module eval → mount settled; excludes fetch and Explorer launch).
+
+| case | result | detail |
+|---|---|---|
+| bg-bare-settimeout | PASS | fired; `globalThis.setTimeout=undefined` |
+| bg-timer-args-observe | PASS | fired; `args(2)=["null","0"]` |
+| bg-queue-microtask | PASS | the guard's own JS arrow, forwarding to `lynx.queueMicrotask` (reachable only through the bare binding — the BG has no `lynx` global) |
+| bg-microtask-ordering | PASS | the guard's global and the engine fn both beat a `setTimeout(0)` queued first; a two-level `Promise.then` chain does **not** (`Promise` is a JS polyfill here) |
+| mt-queue-microtask-guard | PASS | `function [native code]` before *and* after — the **host** provides it, and it is identical in both arms |
+| template-static-render | PASS | mounted in 51.0ms |
+| unmount-oncleanup | PASS | fired |
+| sign-event-bindtap | PASS | tap received, counter=1 (1212 ms) |
+
+The first three encode the "web host ≠ device host" pitfalls: device timers bound through `js_app.cc` drop forwarded args, and `queueMicrotask` is not a bare global on the native host until the entry shim installs it.
+
+**`queueMicrotask` on device.** The BG has no `queueMicrotask` global: the runtime installs one that forwards to `lynx.queueMicrotask`, which is reachable only through the **bare identifier** (`lynx` is a `RuntimeWrapperWebpackPlugin` parameter — there is no `lynx` on `globalThis` on the BG). The MT's JS context provides `queueMicrotask` itself, so the guard is a no-op there. `Promise` is a JS polyfill on this host and is **not** a microtask primitive — a second-level `.then` loses to a `setTimeout(0)` — so anything that needs a real checkpoint (Solid's scheduler, `internal/microtask.ts`) must go through `queueMicrotask`/`lynx.queueMicrotask`. Measured on a Kirin 970 device / Lynx SDK 4.0.
+
+**`mt-queue-microtask-guard` samples the MT context**, which provides `queueMicrotask` itself — the runtime installs nothing there. `--ifr` only picks the bundle (IFR arm in `dist-ifr/`, records `device-selftest-ifr-latest.*`); the value is the same in both.
+
+> **`--tap-x` / `--tap-y` are required** for `sign-event-bindtap`. Both default to empty, so without them the runner never injects a tap and the case fails after the 15 s wait — the failure message (`no tap within 15000ms`) is unrelated to permissions. Coords are device/layout-specific (`265 509` on the device used here); locate the button on your own device first.
+
+## Not measured yet
+
+- **Interaction latency** (click → on-screen end state) — needs on-device tap injection plus a native end-state predicate. The web harness had one (`__x.arm` polling the composed DOM per rAF); there is no device equivalent yet, so this page makes **no latency claims**. `device-lab`'s `sign-event-bindtap` measures a wait, not a click-to-render delay — do not reuse it as a latency figure.
+- **JS heap** — was Chromium CDP only; no device instrumentation behind it.
+- **Multi-device** — everything above is one handset on one LAN.
+
+## Reproduce
+
+```bash
+nub run -F @lynx-solid/benchmark sweep:examples   # offline bundle census
+nub run -F @lynx-solid/benchmark sweep:device     # cold open (device on LAN)
+nub run -F @lynx-solid/benchmark test:device --tap-x 265 --tap-y 509   # behavioral selftest
+```
+
+Raw data: [`packages/benchmark/results/`](https://github.com/lynx/lynx-solid/tree/main/packages/benchmark/results) (`examples-sweep.json`, `examples-sweep-device.json`, `device-selftest-latest.json`, all committed).
+
+> - The dev server writes to `examples/*/dist-dev/`; `dist/` holds build output only, so these runs can happen with a dev server running.
+> - `sweep:device` / `test:device` need the device on the same Wi-Fi LAN (`adb devices` non-empty). The harness rediscovers the port over mdns when it rotates mid-run — a stale `adb connect` port shows as `offline`, and retrying the old port will not fix it.
+> - MIUI also needs the developer option "USB Debugging (Security Settings)" enabled for tap injection; and see the `--tap-x`/`--tap-y` note above.

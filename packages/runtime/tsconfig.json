@@ -1,0 +1,21 @@
+{
+  "extends": "../../config/tsconfig/base.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "@lynx-solid/runtime",
+    // Device runtime baseline: PrimJS ≈ ES2020 built-ins (official docs list
+    // flat/flatMap/includes/entries/values/padStart/padEnd as native; the
+    // gaps — Object.hasOwn / Array.at / replaceAll — are ES2021+, which this
+    // lib setting makes un-writable, so no core-js ships in the bundle).
+    // queueMicrotask is a WHATWG API (DOM surface, declared in internal/env.d.ts)
+    // and gets the engine-backed shim, not a lib-level concern.
+    "lib": ["ES2020"],
+    "types": [
+      "@lynx-js/types",
+      "@lynx-js/type-element-api"
+    ],
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": ["src"]
+}

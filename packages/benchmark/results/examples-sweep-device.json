@@ -1,0 +1,909 @@
+{
+  "meta": {
+    "date": "2026-10-10T15:56:44.628Z",
+    "model": "24117RK2CC",
+    "sdk": "36",
+    "serial": "192.168.3.119:40663",
+    "channel": "auto",
+    "reps": 3,
+    "timeoutMs": 7000,
+    "clockOffsetMs": 2475,
+    "host": "12× AMD Ryzen 5 3600 6-Core Processor              ",
+    "method": "cold open per rep (force-stop → lynx://open) — open→content includes Explorer cold start + LAN fetch + BG eval + render; primary = logcat milestone when present, else PNG content-score transition; no browser involved"
+  },
+  "rows": [
+    {
+      "example": "7guis",
+      "entry": "cells.lynx.bundle",
+      "openMs": 340,
+      "channel": "logcat",
+      "logcatMs": 340,
+      "screencapMs": 1235,
+      "reps": [
+        {
+          "logcat": 466,
+          "screencap": 1235
+        },
+        {
+          "logcat": 340,
+          "screencap": 1338
+        },
+        {
+          "logcat": 318,
+          "screencap": 1223
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 103116,
+      "lynxGzip": 40824,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "7guis",
+      "entry": "circle-drawer.lynx.bundle",
+      "openMs": 346,
+      "channel": "logcat",
+      "logcatMs": 346,
+      "screencapMs": 1189,
+      "reps": [
+        {
+          "logcat": 382,
+          "screencap": 1081
+        },
+        {
+          "logcat": 346,
+          "screencap": 1189
+        },
+        {
+          "logcat": 302,
+          "screencap": 1309
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 85751,
+      "lynxGzip": 35013,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "7guis",
+      "entry": "counter.lynx.bundle",
+      "openMs": 334,
+      "channel": "logcat",
+      "logcatMs": 334,
+      "screencapMs": 1207,
+      "reps": [
+        {
+          "logcat": 334,
+          "screencap": 1207
+        },
+        {
+          "logcat": 334,
+          "screencap": 1212
+        },
+        {
+          "logcat": 311,
+          "screencap": 1125
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 74478,
+      "lynxGzip": 31694,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "7guis",
+      "entry": "crud.lynx.bundle",
+      "openMs": 356,
+      "channel": "logcat",
+      "logcatMs": 356,
+      "screencapMs": 1252,
+      "reps": [
+        {
+          "logcat": 356,
+          "screencap": 1252
+        },
+        {
+          "logcat": 420,
+          "screencap": 1256
+        },
+        {
+          "logcat": 318,
+          "screencap": 1175
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 82700,
+      "lynxGzip": 33906,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "7guis",
+      "entry": "flight-booker.lynx.bundle",
+      "openMs": 378,
+      "channel": "logcat",
+      "logcatMs": 378,
+      "screencapMs": 1164,
+      "reps": [
+        {
+          "logcat": 386,
+          "screencap": 1097
+        },
+        {
+          "logcat": 378,
+          "screencap": 1176
+        },
+        {
+          "logcat": 324,
+          "screencap": 1164
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 77721,
+      "lynxGzip": 32469,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "7guis",
+      "entry": "temperature-converter.lynx.bundle",
+      "openMs": 316,
+      "channel": "logcat",
+      "logcatMs": 316,
+      "screencapMs": 1163,
+      "reps": [
+        {
+          "logcat": 325,
+          "screencap": 1163
+        },
+        {
+          "logcat": 316,
+          "screencap": 1141
+        },
+        {
+          "logcat": 299,
+          "screencap": 1198
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 74541,
+      "lynxGzip": 31645,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "7guis",
+      "entry": "timer.lynx.bundle",
+      "openMs": 320,
+      "channel": "logcat",
+      "logcatMs": 320,
+      "screencapMs": 1259,
+      "reps": [
+        {
+          "logcat": 305,
+          "screencap": 1229
+        },
+        {
+          "logcat": 366,
+          "screencap": 1259
+        },
+        {
+          "logcat": 320,
+          "screencap": 1272
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 77313,
+      "lynxGzip": 32307,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "bench-table-react",
+      "entry": "main.lynx.bundle",
+      "openMs": 323,
+      "channel": "logcat",
+      "logcatMs": 323,
+      "screencapMs": 1275,
+      "reps": [
+        {
+          "logcat": 351,
+          "screencap": 1296
+        },
+        {
+          "logcat": 297,
+          "screencap": 1139
+        },
+        {
+          "logcat": 323,
+          "screencap": 1275
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 96071,
+      "lynxGzip": 40334,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "bench-table",
+      "entry": "main.lynx.bundle",
+      "openMs": 321,
+      "channel": "logcat",
+      "logcatMs": 321,
+      "screencapMs": 1260,
+      "reps": [
+        {
+          "logcat": 321,
+          "screencap": 1208
+        },
+        {
+          "logcat": 345,
+          "screencap": 1307
+        },
+        {
+          "logcat": 307,
+          "screencap": 1260
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 106647,
+      "lynxGzip": 41896,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "counter",
+      "entry": "counter.lynx.bundle",
+      "openMs": 309,
+      "channel": "logcat",
+      "logcatMs": 309,
+      "screencapMs": 1252,
+      "reps": [
+        {
+          "logcat": 313,
+          "screencap": 1259
+        },
+        {
+          "logcat": 301,
+          "screencap": 1202
+        },
+        {
+          "logcat": 309,
+          "screencap": 1252
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 74570,
+      "lynxGzip": 31715,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "device-lab",
+      "entry": "selftest.lynx.bundle",
+      "openMs": 331,
+      "channel": "logcat",
+      "logcatMs": 331,
+      "screencapMs": 1227,
+      "reps": [
+        {
+          "logcat": 331,
+          "screencap": 1227
+        },
+        {
+          "logcat": 369,
+          "screencap": 1168
+        },
+        {
+          "logcat": 303,
+          "screencap": 1293
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 86301,
+      "lynxGzip": 35481,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "elk",
+      "entry": "elk.lynx.bundle",
+      "openMs": 412,
+      "channel": "logcat",
+      "logcatMs": 412,
+      "screencapMs": 1210,
+      "reps": [
+        {
+          "logcat": 423,
+          "screencap": 1273
+        },
+        {
+          "logcat": 412,
+          "screencap": 1206
+        },
+        {
+          "logcat": 377,
+          "screencap": 1210
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 440522,
+      "lynxGzip": 138170,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "hackernews",
+      "entry": "hackernews.lynx.bundle",
+      "openMs": 410,
+      "channel": "logcat",
+      "logcatMs": 410,
+      "screencapMs": 1273,
+      "reps": [
+        {
+          "logcat": 410,
+          "screencap": 1279
+        },
+        {
+          "logcat": 425,
+          "screencap": 1216
+        },
+        {
+          "logcat": 351,
+          "screencap": 1273
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 219025,
+      "lynxGzip": 80424,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "main-thread-draggable",
+      "entry": "main-thread-draggable.lynx.bundle",
+      "openMs": 355,
+      "channel": "logcat",
+      "logcatMs": 355,
+      "screencapMs": 1271,
+      "reps": [
+        {
+          "logcat": 346,
+          "screencap": 1190
+        },
+        {
+          "logcat": 355,
+          "screencap": 1271
+        },
+        {
+          "logcat": 392,
+          "screencap": 1290
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 77386,
+      "lynxGzip": 32310,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "mini-pure",
+      "entry": "mini.lynx.bundle",
+      "openMs": 313,
+      "channel": "logcat",
+      "logcatMs": 313,
+      "screencapMs": null,
+      "reps": [
+        {
+          "logcat": 354,
+          "screencap": null
+        },
+        {
+          "logcat": 306,
+          "screencap": null
+        },
+        {
+          "logcat": 313,
+          "screencap": null
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 28415,
+      "lynxGzip": 15079,
+      "errors": [],
+      "notes": [
+        "logcat milestone only, no visual confirmation"
+      ]
+    },
+    {
+      "example": "motion",
+      "entry": "basic.lynx.bundle",
+      "openMs": 356,
+      "channel": "logcat",
+      "logcatMs": 356,
+      "screencapMs": 1238,
+      "reps": [
+        {
+          "logcat": 356,
+          "screencap": 1238
+        },
+        {
+          "logcat": 437,
+          "screencap": 1264
+        },
+        {
+          "logcat": 321,
+          "screencap": 1223
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 190923,
+      "lynxGzip": 83971,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "motion",
+      "entry": "gesture.lynx.bundle",
+      "openMs": 403,
+      "channel": "logcat",
+      "logcatMs": 403,
+      "screencapMs": 1209,
+      "reps": [
+        {
+          "logcat": 403,
+          "screencap": 1209
+        },
+        {
+          "logcat": 1572,
+          "screencap": 2576
+        },
+        {
+          "logcat": 397,
+          "screencap": 1184
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 183013,
+      "lynxGzip": 81672,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "motion",
+      "entry": "motion-value.lynx.bundle",
+      "openMs": 309,
+      "channel": "logcat",
+      "logcatMs": 309,
+      "screencapMs": 1325,
+      "reps": [
+        {
+          "logcat": 377,
+          "screencap": 1325
+        },
+        {
+          "logcat": 301,
+          "screencap": 1346
+        },
+        {
+          "logcat": 309,
+          "screencap": 1302
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 185024,
+      "lynxGzip": 81026,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "motion",
+      "entry": "spring.lynx.bundle",
+      "openMs": 479,
+      "channel": "logcat",
+      "logcatMs": 479,
+      "screencapMs": 1455,
+      "reps": [
+        {
+          "logcat": 362,
+          "screencap": 1450
+        },
+        {
+          "logcat": 484,
+          "screencap": 1455
+        },
+        {
+          "logcat": 479,
+          "screencap": 1497
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 191086,
+      "lynxGzip": 83997,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "networking",
+      "entry": "networking.lynx.bundle",
+      "openMs": 357,
+      "channel": "logcat",
+      "logcatMs": 357,
+      "screencapMs": 1240,
+      "reps": [
+        {
+          "logcat": 357,
+          "screencap": 1229
+        },
+        {
+          "logcat": 344,
+          "screencap": 1240
+        },
+        {
+          "logcat": 444,
+          "screencap": 1577
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 85603,
+      "lynxGzip": 35030,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "raw-lynx",
+      "entry": "raw.lynx.bundle",
+      "openMs": 418,
+      "channel": "logcat",
+      "logcatMs": 418,
+      "screencapMs": 1244,
+      "reps": [
+        {
+          "logcat": null,
+          "screencap": 1244
+        },
+        {
+          "logcat": 463,
+          "screencap": 1179
+        },
+        {
+          "logcat": 373,
+          "screencap": 1268
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 15143,
+      "lynxGzip": 8001,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "scrolling",
+      "entry": "ListBasic.lynx.bundle",
+      "openMs": 321,
+      "channel": "logcat",
+      "logcatMs": 321,
+      "screencapMs": 1318,
+      "reps": [
+        {
+          "logcat": 384,
+          "screencap": 1289
+        },
+        {
+          "logcat": 316,
+          "screencap": 1630
+        },
+        {
+          "logcat": 321,
+          "screencap": 1318
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 83058,
+      "lynxGzip": 33878,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "scrolling",
+      "entry": "ListFilter.lynx.bundle",
+      "openMs": 475,
+      "channel": "logcat",
+      "logcatMs": 475,
+      "screencapMs": 1366,
+      "reps": [
+        {
+          "logcat": 475,
+          "screencap": 1296
+        },
+        {
+          "logcat": 346,
+          "screencap": 1366
+        },
+        {
+          "logcat": 586,
+          "screencap": 1644
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 85061,
+      "lynxGzip": 34477,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "scrolling",
+      "entry": "ListInfinite.lynx.bundle",
+      "openMs": 393,
+      "channel": "logcat",
+      "logcatMs": 393,
+      "screencapMs": 1422,
+      "reps": [
+        {
+          "logcat": 326,
+          "screencap": 1298
+        },
+        {
+          "logcat": 586,
+          "screencap": 1564
+        },
+        {
+          "logcat": 393,
+          "screencap": 1422
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 85144,
+      "lynxGzip": 34653,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "scrolling",
+      "entry": "ListPrepend.lynx.bundle",
+      "openMs": 358,
+      "channel": "logcat",
+      "logcatMs": 358,
+      "screencapMs": 1416,
+      "reps": [
+        {
+          "logcat": 355,
+          "screencap": 1613
+        },
+        {
+          "logcat": 380,
+          "screencap": 1416
+        },
+        {
+          "logcat": 358,
+          "screencap": 1344
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 86604,
+      "lynxGzip": 34916,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "scrolling",
+      "entry": "ListRemove.lynx.bundle",
+      "openMs": 343,
+      "channel": "logcat",
+      "logcatMs": 343,
+      "screencapMs": 1314,
+      "reps": [
+        {
+          "logcat": 348,
+          "screencap": 1352
+        },
+        {
+          "logcat": 343,
+          "screencap": 1313
+        },
+        {
+          "logcat": 337,
+          "screencap": 1314
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 85717,
+      "lynxGzip": 34640,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "scrolling",
+      "entry": "ListReorder.lynx.bundle",
+      "openMs": 449,
+      "channel": "logcat",
+      "logcatMs": 449,
+      "screencapMs": 1373,
+      "reps": [
+        {
+          "logcat": 675,
+          "screencap": 1782
+        },
+        {
+          "logcat": 449,
+          "screencap": 1373
+        },
+        {
+          "logcat": 349,
+          "screencap": 1361
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 87036,
+      "lynxGzip": 34861,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "scrolling",
+      "entry": "ListWaterfall.lynx.bundle",
+      "openMs": 321,
+      "channel": "logcat",
+      "logcatMs": 321,
+      "screencapMs": 1288,
+      "reps": [
+        {
+          "logcat": 344,
+          "screencap": 1194
+        },
+        {
+          "logcat": 315,
+          "screencap": 1289
+        },
+        {
+          "logcat": 321,
+          "screencap": 1288
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 83408,
+      "lynxGzip": 33994,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "scrolling",
+      "entry": "ScrollViewBasic.lynx.bundle",
+      "openMs": 373,
+      "channel": "logcat",
+      "logcatMs": 373,
+      "screencapMs": 1265,
+      "reps": [
+        {
+          "logcat": 373,
+          "screencap": 1344
+        },
+        {
+          "logcat": 333,
+          "screencap": 1265
+        },
+        {
+          "logcat": 428,
+          "screencap": 1252
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 82364,
+      "lynxGzip": 33726,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "style-demo",
+      "entry": "style.lynx.bundle",
+      "openMs": 344,
+      "channel": "logcat",
+      "logcatMs": 344,
+      "screencapMs": 1297,
+      "reps": [
+        {
+          "logcat": 433,
+          "screencap": 1247
+        },
+        {
+          "logcat": 344,
+          "screencap": 1350
+        },
+        {
+          "logcat": 334,
+          "screencap": 1297
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 80610,
+      "lynxGzip": 33182,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "tailwind",
+      "entry": "tailwind.lynx.bundle",
+      "openMs": 352,
+      "channel": "logcat",
+      "logcatMs": 352,
+      "screencapMs": 1300,
+      "reps": [
+        {
+          "logcat": 385,
+          "screencap": 1283
+        },
+        {
+          "logcat": 352,
+          "screencap": 1300
+        },
+        {
+          "logcat": 336,
+          "screencap": 1361
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 96125,
+      "lynxGzip": 36727,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "todomvc",
+      "entry": "todomvc.lynx.bundle",
+      "openMs": 334,
+      "channel": "logcat",
+      "logcatMs": 334,
+      "screencapMs": 1279,
+      "reps": [
+        {
+          "logcat": 408,
+          "screencap": 1239
+        },
+        {
+          "logcat": 307,
+          "screencap": 1292
+        },
+        {
+          "logcat": 334,
+          "screencap": 1279
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 88869,
+      "lynxGzip": 35691,
+      "errors": [],
+      "notes": []
+    },
+    {
+      "example": "touch-fx",
+      "entry": "main.lynx.bundle",
+      "openMs": 342,
+      "channel": "logcat",
+      "logcatMs": 342,
+      "screencapMs": 1434,
+      "reps": [
+        {
+          "logcat": 679,
+          "screencap": 1673
+        },
+        {
+          "logcat": 330,
+          "screencap": 1434
+        },
+        {
+          "logcat": 342,
+          "screencap": 1363
+        }
+      ],
+      "status": "ok",
+      "lynxRaw": 89790,
+      "lynxGzip": 37316,
+      "errors": [],
+      "notes": []
+    }
+  ]
+}

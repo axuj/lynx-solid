@@ -1,0 +1,43 @@
+view,
+text {
+  box-sizing: border-box;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background-color: #ffffff;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  border-bottom: 1px solid #f0f0f0;
+  padding: 8px 12px;
+}
+
+.row.selected {
+  background-color: #e6f0ff;
+}
+
+.cell-id {
+  width: 64px;
+  font-size: 14px;
+  color: #999999;
+}
+
+.cell {
+  padding: 0 16px 0 8px;
+}
+
+.cell-label {
+  font-size: 16px;
+  color: #333333;
+}
+
+.cell-x {
+  font-size: 16px;
+  color: #0052d9;
+}

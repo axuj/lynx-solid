@@ -1,0 +1,13 @@
+{
+  "name": "@lynx-solid/benchmark",
+  "type": "module",
+  "private": true,
+  "description": "Benchmark and sweep harness for lynx-solid: real-device cold-open breadth, offline bundle size census, and device self-test — all on-device, no web host",
+  "scripts": {
+    "test:device": "node harness/device.mjs",
+    "sweep:examples": "node harness/sweep.mjs",
+    "sweep:device": "node harness/sweep-device.mjs",
+    "sweep:rows": "node harness/sweep-rows.mjs",
+    "selftest": "node harness/rep-window.selftest.mjs"
+  }
+}

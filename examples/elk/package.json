@@ -1,0 +1,31 @@
+{
+  "name": "@lynx-solid/dev-elk",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "rsbuild build",
+    "typecheck": "tsc --noEmit -p ./tsconfig.json"
+  },
+  "dependencies": {
+    "@lynx-solid/plugin": "workspace:*",
+    "@lynx-solid/runtime": "workspace:*",
+    "@tanstack/solid-router": "2.0.0-rc.9",
+    "masto": "^7.2.0",
+    "solid-js": "catalog:",
+    "split.js": "^1.6.5"
+  },
+  "devDependencies": {
+    "@lynx-js/rsbuild-plugin": "catalog:",
+    "@lynx-js/types": "catalog:",
+    "@lynx-js/web-core": "^0.24.1",
+    "@lynx-js/web-elements": "0.12.8",
+    "@lynx-js/web-rsbuild-server-middleware": "^0.24.1",
+    "@rsbuild/core": "catalog:",
+    "@solidjs/meta": "^1.0.0-next.2",
+    "@solidjs/router": "^2.0.0-next.21",
+    "@solidjs/web": "^2.0.0-rc.6",
+    "@tanstack/router-plugin": "^1.168.37",
+    "typescript": "catalog:"
+  }
+}

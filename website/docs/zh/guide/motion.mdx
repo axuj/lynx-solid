@@ -1,0 +1,111 @@
+# Motion
+
+export const sliderGesture = {
+  // 桌面 web 预览由鼠标驱动，滑块只绑 touch 事件——不注入就成静图。
+  // 下面用合成触摸上下拖动，带设备模拟器式的接触点；真实触摸即交还控制权。
+  loop: true,
+  startDelayMs: 1400,
+  steps: [
+    {
+      path: [
+        { x: 0.5, y: 0.35 },
+        { x: 0.5, y: 0.72 },
+      ],
+      durationMs: 700,
+      restMs: 1600,
+    },
+    {
+      path: [
+        { x: 0.5, y: 0.72 },
+        { x: 0.5, y: 0.35 },
+      ],
+      durationMs: 700,
+      restMs: 2000,
+    },
+  ],
+};
+
+由 [`motion-dom`](https://motion.dev/) 在主线程驱动的动画演示——移植自 ReactLynx 的 [`examples/motion`](https://github.com/lynx-family/lynx-examples/tree/main/examples/motion)，出自官方示例集 [lynx-examples](https://github.com/lynx-family/lynx-examples)（Apache-2.0）。每个 case 都是独立入口；所有视觉效果都在主线程（零 ops，零往返）。
+
+`@lynx-js/motion` 是一个轻量适配层，直接复用 Motion 的源码，把命令式 JavaScript API 带到 Lynx。我们不直接依赖那个包（它的两个入口都会经 hooks 链拖入 `@lynx-js/react` 运行时 import——见[为什么](#为什么不直接依赖-lynx-jsmotion)），所以本 demo 直接引用 `motion-dom`，另加一份 vendor 来的适配器切片（`src/adapters/`，port 自 [`@lynx-js/motion`](https://github.com/lynx-family/lynx-stack)，Apache-2.0）。如果你在 Web 上用过 Motion 的 `animate()`、`motionValue()` 和 `spring`，这里的用法完全一样。还不熟悉 Motion？先读 [Motion 快速上手](https://motion.dev/docs/quick-start)。
+
+## 安装
+
+```bash
+nub add motion-dom
+```
+
+case 只经 `../adapters` 一条根边进 shared 图（根边显式标 `with { runtime: 'shared' }`，barrel 随后导入的一切由 shared 层级联自动跟入——见[主线程脚本](/zh/guide/main-thread-script#跨线程共享模块)）：
+
+```ts title="src/Basic/index.tsx"
+import { animateEl } from '../adapters' with { runtime: 'shared' }
+```
+
+## 为元素添加动画
+
+`animateEl` 让引擎跑 scale + rotate。套路照抄官方文档：
+
+1. 用 `useMainThreadRef()` 创建主线程元素引用。
+2. 经 `main-thread:ref` 绑到元素。
+3. 在主线程函数里调 `animateEl()` 启动动画。
+
+<Go example="motion" entry="src/Basic" defaultFile="src/Basic/index.tsx" defaultEntryName="basic" />
+
+`animate()` 接受与 Web 端 Motion 相同的[选项](https://motion.dev/docs/animate#options)，包括 `duration`、`ease` 和 `delay`。一条铁律：关键帧一律显式 `[from, to]`——单值 `"to"` 写法会迫使引擎经全局 `getComputedStyle` 读当前值，web 宿主下原生实现拒绝代理 subject，动画静默死亡。
+
+## 使用弹簧动画
+
+当值需要以弹簧物理收敛，而不是按固定时长缓动时，传弹簧 transition。Motion 的全部 [spring 选项](https://motion.dev/docs/spring)都支持，包括 `stiffness`、`damping` 和 `mass`：
+
+<Go example="motion" entry="src/Spring" defaultFile="src/Spring/index.tsx" defaultEntryName="spring" />
+
+弹簧 case 自动开跑、循环由引擎持有：`animateEl` 传 `type: 'spring'` + `repeat: Infinity` + 短 `repeatDelay` 做 rotate 循环——帧循环在 motion-dom 内部（不再手写 driver）。
+
+## 使用 MotionValue
+
+[`motionValue()`](https://motion.dev/docs/motion-value) 存一个值，可直接拿去做动画，也可订阅变化。多个 effect 或事件处理器要共享同一个动画值时用它：
+
+<Go example="motion" entry="src/MotionValue" defaultFile="src/MotionValue/index.tsx" defaultEntryName="motion-value" />
+
+## 构建手势效果
+
+高频触摸输入，用 `main-thread:bindtouchstart`、`main-thread:bindtouchmove`、`main-thread:bindtouchend` 把事件处理留在主线程。再结合 MotionValue 与 `styleEffect()`，从手势状态派生视觉状态：
+
+<Go example="motion" entry="src/iOSSlider" defaultFile="src/iOSSlider/index.tsx" defaultEntryName="gesture" autoGesture={sliderGesture} />
+
+与官方 iOSSlider 的差异：`useMotionValueRef` 换成 worklet 内现造 + ref 持有；`progress`/`clamp` 是两行本地函数（`motion-dom` 没有它们，在 `motion` 包里）。目录名与入口名均对齐 [lynx-examples](https://github.com/lynx-family/lynx-examples)（Apache-2.0）；本 demo 另外显示实时亮度百分比（官方没有）。
+
+:::info
+Motion 的 Web 专属手势 API，如 `scroll()`、`inView()`、`hover()`、`press()`，这里不包含。请用上面展示的主线程触摸事件。
+:::
+
+## 为什么不直接依赖 `@lynx-js/motion`
+
+有三个障碍，每一个都实际踩过：
+
+1. **会把 React 运行时拖进来。** `.` 和 `./mini` 两个入口都会经 hooks 链 import `@lynx-js/react` 的运行时代码，依赖它就等于把 React 运行时引入了仓库。
+2. **tree-shaking 拦不住类型污染。** TypeScript 会沿类型链走到 `framer-motion` 的类型定义，其全局 JSX 增补会改写所有文件的 JSX 命名空间（`Element` 对不上 `ReactNode`），每个写 JSX 的文件都过不了 `tsc`。
+3. **`animate` 本体也依赖 React。** `motion` 包的 `animate` 把 React 列为 peer dependency。
+
+因此本 demo 只 vendor 与 React 无关的适配器文件（`src/adapters/`），依赖只保留纯上游的 `motion-dom`。
+
+## 真机坑
+
+- **`queueMicrotask`**：`motion-dom` 的 frameloop 在模块求值期裸读它，而这个裸全局**按线程不保证**——在一台 Kirin 970 设备 / Lynx SDK 4.0 上实测：BG 没有、MT 自带。所以两层装上：runtime 的 `queue-microtask-shim`（BG 引导段首行导入，装的是转调引擎 `lynx.queueMicrotask` 的包装）+ 本例的 `src/adapters/shim-entry.ts`——官方 `@lynx-js/motion` 门（引擎供的 `__MAIN_THREAD__` / `__DEV__` 宏选全套门面 / 队列兜底，不做能力探测）。垫片先于 `motion-dom` 求值是结构性的：每个 value-import `motion-dom` 的模块（`src/adapters/motion.ts`、`src/adapters/index.ts`）都裸引入一行 `import './shim-entry'`——shared 层级联在构建时标记这条边（其引入方已在层上；完全闭包：value、裸副作用、re-export，零源码改写），Plan B 把这行冻结在原位，垫片必然先跑；case 只经 `../adapters` 进来，不用手动排序。以后再有第三方 import 同样崩，先查主线程包里模块求值期的裸全局。
+- **`performance`**：引擎时钟在第一次动画时懒读取。同一垫片文件覆盖——`globalThis.performance` 缺失时才装 `now()` 门面、已存在则跳过（设备主线程可能带 `window` 桩，不覆盖宿主已有实现）；安装门控走官方 `__MAIN_THREAD__` / `__DEV__` 宏（与上条同一道门，不作能力探测——探测会误判 `window` 桩）。
+- **key 拼写看写在哪种表面。** `style` **对象**（静态或动态）**收驼峰**——引擎在对象路径上做 key 转换（`FiberSetInlineStyles` 走 `CamelCaseToDashCase`），且编译器把静态对象保持为对象烘进 skeleton，不落字符串路径。CSS **字符串**（`style="…"` / 模板串）是裸解析，必须横线——驼峰字符串 key（`fontStyle:italic`）被静默丢弃。命令式 `el.setStyleProperty(name, v)` 的 `name` 同样要横线。
+
+## 文件
+
+| 文件 | 作用 |
+|---|---|
+| `src/Basic/index.tsx` | 元素正反转循环（scale + rotate，自动开跑） |
+| `src/Spring/index.tsx` | 引擎弹簧 rotate 循环（自动开跑） |
+| `src/MotionValue/index.tsx` | 共享 MotionValue + `animate()` 正反转循环 |
+| `src/iOSSlider/index.tsx` | 手势驱动的滑块 + styleEffect 绑定 |
+| `src/shared/ThemeFrame.tsx` | 主题外壳（移植自 [lynx-examples](https://github.com/lynx-family/lynx-examples)，Apache-2.0，无 `useGlobalProps`） |
+| `src/adapters/index.ts` | 对外 barrel——case 从 `../adapters` 一条 shared 根边引入全部 API |
+| `src/adapters/element.ts` | `ElementCompt` 类（从 shim-entry 拆出，让 gate 保持纯副作用文件） |
+| `src/adapters/motion.ts` | `animateEl` / `animateMv` / `tween` / `colorMixer` / `styleEffect` / `springValueTo`（A2 shared：经 `with { runtime: 'shared' }` value-import `shim-entry`） |
+| `src/adapters/shim-entry.ts` | 垫片 + 安装调用（官方 `__MAIN_THREAD__` / `__DEV__` 宏门控，缺失才装、已有不覆盖） |
+| `rsbuild.config.ts` | 四个入口（`basic` / `spring` / `motion-value` / `gesture`） |

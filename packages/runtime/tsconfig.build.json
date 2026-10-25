@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // composite: referenced by the root solution build (`tsc -b` orders +
+    // incremental); sole writer is this package's own build script.
+    "composite": true,
+    "rootDir": "src",
+    "allowImportingTsExtensions": false,
+    "declaration": true,
+    "declarationMap": false,
+    // Countermands dev's noEmit:true (build extends dev) — a missing line
+    // here silently disables emit for the whole program (TS6310 downstream).
+    "noEmit": false,
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}

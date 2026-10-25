@@ -1,0 +1,26 @@
+{
+  "name": "@lynx-solid/dev-hackernews",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "rsbuild build",
+    "typecheck": "tsc --noEmit -p ./tsconfig.json"
+  },
+  "dependencies": {
+    "@lynx-solid/plugin": "workspace:*",
+    "@lynx-solid/runtime": "workspace:*",
+    "@tanstack/solid-router": "2.0.0-rc.9",
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "@lynx-js/rsbuild-plugin": "catalog:",
+    "@lynx-js/tailwind-preset": "catalog:",
+    "@lynx-js/types": "catalog:",
+    "@rsbuild/core": "catalog:",
+    "@tanstack/router-plugin": "^1.168.37",
+    "rsbuild-plugin-tailwindcss": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:"
+  }
+}

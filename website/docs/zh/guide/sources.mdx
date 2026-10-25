@@ -1,0 +1,33 @@
+# 来源与致谢
+
+Lynx Solid 不是凭空长出来的。它的一些思路、几个演示，以及其中一个包，都移植或改编自更早的开源工作，写下这些工作的作者值得被点名。这一页说明各处代码的出处。
+
+## 上游项目
+
+| 项目 | 许可证 | 我们借鉴了什么 |
+|---|---|---|
+| [vue-lynx](https://github.com/Huxpro/vue-lynx) | Apache-2.0 | 用非 React 框架实现双线程 Lynx 渲染器的参照。触摸特效演示的 worklet 引擎几乎逐行移植自它（见[玩一玩：触摸特效](/zh/guide/touch-fx)）；其 vapor 分支的 `ui-vdom`/`ui-react` 是本仓库基准测试用例的同构对象。 |
+| [ReactLynx](https://github.com/lynx-family/lynx-stack)（lynx-stack） | Apache-2.0 | 主要是沿用它的约定而非搬运代码：用 `background-only` 标记包"毒化"后台线程专属模块的做法、主线程脚本背后的共享层模型，以及[基准测试](/zh/guide/benchmark-framework)里作为定标基线的成熟实现。 |
+| [lynx-examples](https://github.com/lynx-family/lynx-examples) | Apache-2.0 | 示例的组织方式。[Motion](/zh/guide/motion) 演示的目录名与入口名对齐它的 `examples/motion`，演示的主题外壳也移植自它的公共框架（去掉了 `useGlobalProps`）。 |
+| [dom-expressions](https://github.com/ryansolid/dom-expressions) | MIT，Copyright Ryan Carniato | JSX 编译器。见下方[编译器 fork](#编译器-fork)。 |
+| [motion](https://motion.dev/) | MIT | 动画引擎。`motion-dom` 作为普通依赖直接引用；[`@lynx-js/motion`](https://github.com/lynx-family/lynx-stack)（Apache-2.0）中与 React 无关的一小部分 vendor 进 Motion 演示，作为 Lynx 元素适配器。 |
+| [solid-js](https://github.com/solidjs/solid) | MIT | 响应式内核与组件系统，原样使用——同一个包、同一套 API，与 Web 端一致；Lynx Solid 只在其上加了渲染器。 |
+| [Elk](https://github.com/elk-zone/elk)（MIT），经 [vue-lynx 的 Elk 示例](https://github.com/Huxpro/vue-lynx/tree/main/examples/elk)（Apache-2.0） | MIT / Apache-2.0 | [Elk](/zh/guide/elk) 这个示例移植自 vue-lynx 的 Elk 示例，而后者本身是 Anthony Fu 与 elk-zone 团队的 Elk Mastodon 客户端的移植：页面结构、领域逻辑与 masto.js 的分页写法。 |
+
+## 编译器 fork
+
+`packages/compiler/babel-plugin-jsx-lynx` 硬 fork 自 [dom-expressions](https://github.com/ryansolid/dom-expressions) 的 `babel-plugin-jsx`（MIT，Copyright Ryan Carniato）。它不再跟随上游，改动直接落在本地源码上。
+
+fork 加的是 Lynx 专属的部分：把静态子树抽成主线程骨架模板、以 `createCode` ops 形式产出，并给 `'main thread'` worklet 函数做捕获与稳定 id。基线版本、已手工挑选的上游提交，以及逐文件的来源对照，都记在仓库内的 `packages/compiler/babel-plugin-jsx-lynx/UPSTREAM.md`。
+
+被 fork 的源码保留 MIT 许可声明与原作者版权。
+
+## 许可说明
+
+- Lynx Solid 自身以 MIT 许可发布（见仓库根目录的 `LICENSE`）。
+- 移植与 vendor 进来的代码保留各自的许可与原作者版权声明。本仓库不重新许可任何他人的作品。
+- 对 Apache-2.0 部分（vue-lynx、lynx-stack / ReactLynx、lynx-examples）而言，这意味着 Apache-2.0 的许可与声明要求在这些部分上继续适用。
+
+## 演示与基准的出处
+
+各案例页在有自己的来源时都就地标注了：[TodoMVC](/zh/guide/todomvc)（框架对比的经典基准）、[7 GUIs](/zh/guide/7guis)（出自 Solid 官方示例族）、[Elk](/zh/guide/elk) 与 [Motion](/zh/guide/motion)。需要逐文件细节时看那些页面；本页是总览。

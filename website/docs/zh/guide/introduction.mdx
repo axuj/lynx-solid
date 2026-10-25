@@ -1,0 +1,165 @@
+# 什么是 Lynx Solid？
+
+**Lynx Solid** 是一个用于 [Lynx](https://lynxjs.org) 的 Solid 2 自定义渲染器，让你能够使用 Solid 熟悉的细粒度响应式、函数组件和 JSX 来构建原生 Lynx 应用。
+
+如果你了解 Solid 2 并且熟悉 Lynx，那你已经知道如何使用 Lynx Solid 了。
+
+## 主要特性
+
+- **熟悉的 Solid 2 API** — 使用 `createSignal()`、`createMemo()`、`createEffect()`、`<For>`、`<Show>` 以及 Solid 中你喜爱的一切功能。响应式直接来自 `solid-js`——同一包、同一 API，和 Web 端一致。
+- **跨平台原生渲染** — Lynx 在移动端和桌面端提供高性能原生渲染引擎，同时具备一流的 Web 渲染支持。
+- **双线程架构** — Solid 运行在后台线程；主线程负责原生渲染。这种分离使你的应用始终保持流畅响应。对于延迟敏感的交互（拖拽、滚动），[主线程脚本](/zh/guide/main-thread-script)允许你使用 `'main thread'` 标记函数，使其直接在主线程上运行，消除跨线程延迟。
+- **静态骨架，动态开孔** — fork 自 dom-expressions [`babel-plugin-jsx`](https://github.com/ryansolid/dom-expressions)（MIT）的编译器在构建期把静态子树抽成主线程骨架。每个模板实例一次 `INSTANTIATE`，静态子树零 ops。
+
+## 面向 Solid Web 开发者
+
+如果你从 Web 端的 Solid 转过来，你所知道的大部分内容都可以沿用。以下是一些关键差异。
+
+### 更改你的 `import`
+
+响应式仍从 `solid-js` 来；只有挂载 / 桥接 API 来自 `@lynx-solid/runtime`：
+
+```ts
+import { createSignal } from 'solid-js'
+import { render } from '@lynx-solid/runtime'
+```
+
+没有可供挂载的 DOM 节点——`render()` 把组件树挂到 Lynx 页面根下（见 [Solid 兼容性](/zh/guide/solid-compatibility)）。
+
+### 不同的元素
+
+Lynx 提供原生元素而非 HTML。使用 `<view>`、`<text>`、`<image>` 等来替代 `<div>`、`<span>`、`<img>`：
+
+```diff
+- <div class="card">
+-   <span>{{ message }}</span>
++ <view class="card">
++   <text>{message()}</text>
+  </view>
+```
+
+:::info
+文本内容必须包裹在 `<text>` 中 — Lynx 不支持 `<view>` 内的裸文本节点。
+:::
+
+### 不同的事件
+
+Lynx 使用自己的事件系统。与 DOM 只靠事件名标识事件不同，每个 Lynx 事件在注册时都带有一个**类型**，用来控制冒泡与线程归属：`bind`（冒泡）、`catch`（阻止冒泡），以及 `main-thread` 变体（处理器为主线程脚本，直接在主线程上运行）。Lynx Solid 对所有这些类型都沿用 Lynx 原生的属性命名，Lynx 文档中的任何事件都可以原样写成属性绑定：
+
+```tsx
+<view
+  bindtap={onTap}
+  catchtap={onTapAndStop}
+  main-thread:bindtap={onMainThreadTap}
+/>
+```
+
+刻意没有 `on*` 风格的 DOM 别名：Lynx 事件不是 DOM 事件（传播与事件对象都不同），`onClick` 会给出错误的语义暗示。
+
+更多详情请参阅 [Lynx 事件处理指南](https://lynxjs.org/guide/interaction/event-handling.html)。
+
+### 没有 `document` 或 `window`
+
+Lynx 不提供浏览器全局对象。Lynx 通过 [`lynx`](https://lynxjs.org/next/api/lynx-api/lynx.html) 全局对象提供自己的 [API](https://lynxjs.org/next/api/lynx-api/lynx)：
+
+- [全局 API](https://lynxjs.org/next/api/lynx-api/global.html)，如 `setTimeout()` 和 `console.log()`，在两个线程上都可用，与 Web 相同。
+- 类 DOM 查询（例如 `querySelector`、`getBoundingClientRect`）可通过[异步后台线程 API](https://lynxjs.org/next/api/lynx-api/nodes-ref.html) 或[同步主线程 API](https://lynxjs.org/next/api/lynx-api/main-thread.html) 使用，具体取决于你需要在哪个线程上使用。
+- 平台原生能力通过 [NativeModules](https://lynxjs.org/guide/use-native-modules.html) 和[自定义元素](https://lynxjs.org/guide/custom-native-component.html)提供。
+
+一条 PrimJS 规则：宿主定时器会丢弃转发参数，因此需要参数的回调必须使用箭头函数包装——`setTimeout(() => fn(a, b), 100)`，永远不要写 `setTimeout(fn, 100, a, b)`。
+
+## 理解双线程模型
+
+你应该期望你的 Solid 代码在 Lynx 上可以直接运行。主要的不同之处在于线程模型。如果你使用过 Web Workers，Lynx 的架构会让你感到熟悉。Solid 运行在**后台线程**上，而原生渲染发生在**主线程**上 -- 就像将工作交给 Web Worker 以保持 UI 线程的流畅响应。不同之处在于，在 Lynx 中，这是_默认_行为 -- 细粒度更新永远不会阻塞主线程。
+
+在底层，Lynx Solid 在后台线程上构建 **ShadowElement** 树。变更被批量收集为 **ops** 并刷新到主线程。用户交互以**事件**的形式回传。这形成了一个类似于浏览器事件循环的周期：
+
+```
+        ┌────────────────────────────────────────────────────────────┐
+        │                     Background Thread                      │
+        │  Solid runtime · signals · effects · your code             │
+        └──────────────┬──────────────────────▲──────────────────────┘
+                  ops  │                      │  events
+                       ▼                      │
+        ┌─────────────────────────────────────┴──────────────────────┐
+        │                        Main Thread                         │
+        │  Native elements · layout · rendering · Main Thread Script │
+        └────────────────────────────────────────────────────────────┘
+```
+
+静态子树在更新时根本不进入这个周期：编译期将其提升为骨架模板，由主线程一次性实例化。
+
+一个完整的周期 — ops 向下、事件向上 — 就是一个 **tick**。原生元素在主线程上异步创建，因此任何接触它们的操作都必须至少等待一个完整周期。这与 Web 上等待挂载的心智模型相同，只是扩展到了跨线程场景。
+
+### 这在实践中意味着什么
+
+在日常开发中，双线程模型基本上是透明的。只需要记住三点：
+
+#### 挂载是声明式的 —— `render()` 拥有页面根
+
+根只有一个：双线程共同约定的页面。`render(() => <App />)` 将组件树挂载其下，并返回一个负责整体卸载的 disposer。挂载后如需操作原生元素，请使用 `lynx.createSelectorQuery()` 异步查询 —— 或见下条走主线程同步操作。
+
+#### 生命周期运行在后台线程 —— 等一个 tick 再碰原生元素
+
+就像在 Web 上一样，`onSettled` 表示"组件树已构建完成"。不同之处在于原生元素是在主线程上异步创建的。如果你需要在挂载后与原生元素交互，请使用异步查询 API，它在元素创建完成后 resolve：
+
+```tsx
+import { onSettled } from 'solid-js'
+
+function App() {
+  onSettled(() => {
+    // 后台树已建好；原生元素要再等一个 tick。
+    lynx.createSelectorQuery()
+      .select('.target')
+      .invoke({
+        method: 'boundingClientRect',
+        success: (res) => { console.log(res) },
+      })
+      .exec()
+  })
+
+  return <scroll-view class="target">…</scroll-view>
+}
+```
+
+如果你的 `onSettled` 只是设置响应式状态、定时器或数据请求，则无需等待 — 这些操作不依赖原生元素。
+
+#### 主线程脚本实现零延迟交互（进阶）
+
+从后台线程访问原生元素始终是异步的。对于大多数场景这已经足够。当你需要同步访问 —— 流畅的动画、手势处理、布局测量 —— 请使用[主线程脚本](/zh/guide/main-thread-script)。使用 `'main thread'` 标记的函数直接在主线程上运行，并可经由 `MainThreadRef` 修改原生元素：
+
+```tsx
+import type { ScrollEvent } from '@lynx-js/types'
+import { render, useMainThreadRef } from '@lynx-solid/runtime'
+
+function App() {
+  const boxRef = useMainThreadRef<{ setStyleProperty: (k: string, v: string) => void } | null>(null)
+
+  const onScroll = (event: ScrollEvent) => {
+    'main thread'
+    boxRef.current?.setStyleProperty('transform', `translateY(${-event.detail.scrollTop}px)`)
+  }
+
+  return (
+    <view>
+      <scroll-view main-thread:bindscroll={onScroll} scroll-y>…</scroll-view>
+      <view main-thread:ref={boxRef} />
+    </view>
+  )
+}
+```
+
+具体的功能特性说明，请参阅 [Solid 兼容性](/zh/guide/solid-compatibility)。
+
+### 底层：ops 协议
+
+后台的每一次变更都会变成数字 op（建元素、设属性、挂载……），一次批量刷新。这个协议级探针手写了与编译产物等价的 ops——只看源码：
+
+<Go example="mini-pure" defaultFile="src/index.ts" mode="source" />
+
+## 下一步
+
+- [Solid 兼容性](/zh/guide/solid-compatibility) — 逐项了解哪些功能可用、哪些有差异
+- [主线程脚本](/zh/guide/main-thread-script) — 在主线程上运行性能关键的逻辑
+- [教程：计数器](/zh/guide/tutorial-counter) — 制作第一个可交互页面
+- [来源与致谢](/zh/guide/sources) — 本项目移植与 vendor 的代码分别出自哪里

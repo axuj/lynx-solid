@@ -1,0 +1,40 @@
+{
+  "name": "@lynx-solid/website",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lynx Solid documentation site (Rspress + @lynx-js/go-web live demos)",
+  "scripts": {
+    "prepare-examples": "node scripts/prepare-examples.mjs",
+    "dev": "rspress dev --port 3100 --host 0.0.0.0",
+    "dev:full": "npm run prepare-examples && rspress dev --port 3100 --host 0.0.0.0",
+    "build": "npm run prepare-examples && rspress build",
+    "preview": "rspress preview",
+    "typecheck": "node scripts/typecheck.mjs"
+  },
+  "dependencies": {
+    "@douyinfe/semi-icons": "^2.103.0",
+    "@douyinfe/semi-ui": "^2.103.0",
+    "@lynx-js/go-web": "^0.9.0",
+    "@lynx-js/lynx-core": "^0.1.4",
+    "@lynx-js/web-core": "^0.26.1",
+    "@lynx-js/web-elements": "^0.12.11",
+    "@rsbuild/plugin-sass": "^2.0.1",
+    "@rspress/core": "^2.0.3",
+    "@rspress/plugin-llms": "^2.0.5",
+    "@shikijs/transformers": "^4.4.3",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.3.0",
+    "react-copy-to-clipboard": "^5.1.1",
+    "react-dom": "^19.3.0",
+    "sass": "catalog:",
+    "swr": "^2.5.1",
+    "vscode-icons-js": "^11.6.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-copy-to-clipboard": "^5.0.7",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "catalog:"
+  }
+}

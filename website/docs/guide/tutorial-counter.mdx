@@ -1,0 +1,171 @@
+# Tutorial: Counter
+
+We will build an interactive counter together using Solid 2 and Lynx. This tutorial does not assume any existing Lynx knowledge. The techniques you'll learn in the tutorial are fundamental to building any Lynx pages and applications.
+
+:::note
+
+This tutorial is designed for people who prefer to learn by doing and want to quickly try making something tangible. If you prefer learning each concept step by step, start with [What is Lynx Solid?](/guide/introduction).
+
+:::
+
+## What are we building?
+
+A counter: a number and a button. Tapping the button increments the number through the full background → ops → main thread cycle.
+
+<Go example="counter" defaultFile="src/index.tsx" />
+
+## Setup for the tutorial
+
+Check out the detailed [quick start](/guide/quick-start) doc that will guide you through creating a new Lynx project. We recommend TypeScript for a better development experience, provided by static type checking and better editor IntelliSense.
+
+Your `rsbuild.config.ts` should look like this:
+
+```ts title="rsbuild.config.ts"
+import { defineConfig } from '@rsbuild/core'
+import { pluginSolidLynx } from '@lynx-solid/plugin'
+
+export default defineConfig({
+  source: {
+    entry: {
+      main: './src/index.tsx',
+    },
+  },
+  plugins: [pluginSolidLynx()],
+})
+```
+
+Everything below lives in `src/index.tsx`.
+
+## Your First Component: Static UI
+
+Every Lynx page is built from native elements. `view` is the container, and `text` is the only element allowed to hold characters:
+
+```tsx title="src/index.tsx"
+import { render } from '@lynx-solid/runtime'
+
+function Counter() {
+  return (
+    <view style="display:linear;linear-direction:column;align-items:center;padding:48px">
+      <text style="font-size:28px">count: 0</text>
+    </view>
+  )
+}
+
+render(() => <Counter />)
+```
+
+`render` mounts the tree under the Lynx page root. Static subtrees like this one compile to a skeleton the main thread instantiates in one shot — no per-node ops at runtime.
+
+:::info Lynx Solid Entry Point
+Like `render()` into a DOM node on the web, Lynx Solid mounts with `render(() => <Counter />)`. The difference is that there is no DOM element to mount to — it attaches to the Lynx page root automatically and returns a disposer that unmounts everything.
+:::
+
+## Adding State: A Signal
+
+Import `createSignal` from `solid-js` and read it inside the text. The compiler turns `{count()}` into a dynamic hole bound to that text node:
+
+```tsx title="src/index.tsx"
+import { createSignal } from 'solid-js'
+import { render } from '@lynx-solid/runtime'
+
+function Counter() {
+  const [count, setCount] = createSignal(0)
+
+  return (
+    <view style="display:linear;linear-direction:column;align-items:center;padding:48px">
+      <text style="font-size:28px">
+        count:
+        {count()}
+      </text>
+    </view>
+  )
+}
+
+render(() => <Counter />)
+```
+
+`createSignal(0)` creates a reactive variable. When `count()` changes, Solid's reactivity system re-runs only the effect tracking that text — and only a text-update op is emitted. The surrounding layout is static and never re-sent.
+
+## Adding Interactivity: Handle the Tap
+
+Lynx events use Lynx names. `bindtap` registers a tap handler that runs on the background thread; the handler updates the signal, which flows back down as an op:
+
+```tsx title="src/index.tsx"
+function Counter() {
+  const [count, setCount] = createSignal(0)
+
+  return (
+    <view style="display:linear;linear-direction:column;align-items:center;padding:48px">
+      <text style="font-size:28px">
+        count:
+        {count()}
+      </text>
+      <view
+        bindtap={() => setCount(c => c + 1)}
+        style="margin-top:24px;padding:12px 32px;background-color:#2c4f7c;border-radius:8px"
+      >
+        <text style="color:#ffffff;font-size:20px">increment</text>
+      </view>
+    </view>
+  )
+}
+```
+
+:::details What is "bindtap"?
+Lynx uses its own event system where every event carries a registration type: `bind` (propagates to ancestors), `catch` (stops propagation). `bindtap` is a tap that bubbles — the Lynx equivalent of a click. There are intentionally no DOM-style `on*` aliases. Learn more on the [Event Handling](https://lynxjs.org/next/guide/interaction/event-handling) page.
+:::
+
+That's the full app. Run the dev server, open the Web Preview URL, and tap increment — the number ticks up through the full cycle:
+
+1. The tap fires on the **main thread** and is delivered to the **background** event registry.
+2. Your `bindtap` handler runs and calls `setCount` — pure Solid reactivity.
+3. The effect tracking `{count()}` re-fires and pushes a text-update op into the batch.
+4. The batch flushes; the main thread applies it to the live text node.
+
+For interactions where that round-trip is too slow (drag, scroll-linked animation), the same handler shape moves to the main thread verbatim — see [Main Thread Script](/guide/main-thread-script).
+
+## Wrapping Up
+
+Congratulations! You have successfully created an interactive page! Throughout this tutorial, you've covered the basics of writing interactive UIs on the Lynx platform with Solid 2: native elements, signals, and background-thread events.
+
+## ReactLynx vs Lynx Solid Quick Reference
+
+| Concept | ReactLynx | Lynx Solid |
+| ------- | --------- | ---------- |
+| Create app | `root.render(<App />)` | `render(() => <App />)` |
+| State | `const [x, setX] = useState(val)` | `const [x, setX] = createSignal(val)` |
+| Update state | `setX(newVal)` | `setX(newVal)` / `setX(prev => ...)` |
+| Derived | `useMemo(() => ...)` | `createMemo(() => ...)` |
+| Lifecycle | `useEffect(() => ..., [])` | `onSettled(() => ...)` |
+| Conditional | `{cond && <el />}` | `<Show when={cond}>` |
+| List | `{arr.map(x => <el key={x} />)}` | `<For each={arr()}>{x => <el />}</For>` |
+| Tap event | `bindtap={handler}` | `bindtap={handler}` |
+| Scroll event | `bindscroll={handler}` | `bindscroll={handler}` |
+| Native list | `<list>` + `item-key` | `<list>` + `item-key` |
+| Main Thread Script event | `main-thread:bindscroll={fn}` | `main-thread:bindscroll={fn}` |
+| Main Thread Script ref | `useMainThreadRef(null)` | `useMainThreadRef(null)` |
+| `'main thread'` directive | `'main thread'` | `'main thread'` |
+
+## Running the Examples
+
+```bash
+# Install dependencies
+nub install
+
+# Build the runtime packages
+nub run build
+
+# Start the dev server
+cd examples/counter && nub run dev
+```
+
+Then open the Web Preview URL for the counter bundle:
+
+| Entry | Bundle | What it shows |
+| ----- | ------ | ------------- |
+| `counter` | `counter.lynx.bundle` / `counter.web.bundle` | Counter with tap-to-increment |
+
+## Next Steps
+
+- [Playground: Touch FX](/guide/touch-fx) — Touch-driven spring physics and particle pools, all on the main thread
+- [Solid Compatibility](/guide/solid-compatibility) — Events, elements and what differs from web Solid

@@ -1,0 +1,99 @@
+# Solid 兼容性
+
+Lynx Solid 的响应式直接来自 `solid-js`——和 Web 端同一包。变化的是**渲染目标**：ops 驱动的 ShadowElement 树，而不是 DOM 节点。
+
+下面是 Lynx 上验证过的 Solid 能力逐项对照，有 Lynx 差异的地方行内标出。双线程底层见[理解双线程模型](/zh/guide/introduction#理解双线程模型)。
+
+## 响应式
+
+Lynx Solid 完整复用 Solid 响应式核心。CHEATSHEET 里的响应式 API 和 Web 端行为一致，无 Lynx 适配：`createSignal`、`createMemo`、双参数 `createEffect`、`createStore`、微任务批处理、`untrack`、context、`<Show>`、`<For>`、`<Switch>`/`<Match>`、`onSettled`、`onCleanup`。
+
+7guis 的计数器和计时器用 signal、memo、effect 跑持续更新：
+
+<Go example="7guis" defaultFile="src/counter/index.tsx" entry="src/counter" defaultEntryName="counter" />
+
+## 元素
+
+用 Lynx 内建元素，不用 HTML。可用标签：`view`、`text`、`image`、`scroll-view`、`list`、`list-item`、`input`、`textarea`、`page`（另有 `svg` / `raw-text` 两个补充元素），props 来自 `@lynx-js/types`：
+
+```tsx
+// ❌ Web Solid 写法
+<div class="card" onClick={go}>
+  <span>hello</span>
+</div>
+
+// ✅ Lynx Solid 写法
+<view class="card" bindtap={go}>
+  <text>hello</text>
+</view>
+```
+
+:::info
+文本必须包在 `<text>` 里——Lynx 不支持 `<view>` 下的裸文本节点。
+:::
+
+## 事件
+
+Lynx 事件、Lynx 名字——Lynx 文档里怎么写，这里就怎么写：
+
+:::details 功能支持明细
+
+| 注册 | 状态 | 说明 |
+|---|---|---|
+| `bindtap` | 可用 | 点击，冒泡到祖先。 |
+| `catchtap` | 可用 | 点击，原生截断传播。 |
+| `bindscroll` | 可用 | `scroll-view` 的滚动事件。 |
+| `bindinput` / `bindconfirm` / `bindblur` | 可用 | `input` / `textarea` 的输入事件。 |
+| `bindscrolltolower` | 可用 | `list` 的无限加载哨兵。 |
+| `main-thread:bind*` | 可用 | 主线程脚本处理器，必须带 `'main thread'`。`bind`/`catch` 糖不适用。 |
+| `on*` 别名 | 不支持 | Lynx 事件不是 DOM 事件（传播和事件对象都不同），`onClick` 会误导人。 |
+
+:::
+
+在线试试——一个 scroll-view 同时驱动两条路径：`bindscroll`（后台，慢手指半拍）对 `main-thread:bindscroll`（主线程，严丝合缝）：
+
+<Go example="main-thread-draggable" defaultFile="src/index.tsx" />
+
+## 输入框
+
+`input` / `textarea` 的 `value` 作初始内容，经 `bindinput` / `bindconfirm` / `bindblur` 上报。TodoMVC 的顶栏和行内编辑三件全用：
+
+<Go example="todomvc" defaultFile="src/TodoHeader.tsx" />
+
+:::warning 注意
+没有 `autofocus` 属性，没有 `type="checkbox"` / `type="radio"` / `<select>`——Lynx 没有原生对等物。用 `view` + `bindtap` 搭开关（TodoMVC 就是这么干的）。
+:::
+
+## 列表
+
+`<For>` 在后台线程按引用跟踪行；原生回收还要 Lynx 的 `item-key`，每个 `list-item` 必带。缺失或碰撞的 `item-key` 是 cell 空白/错位的常见原因：
+
+<Go example="scrolling" defaultFile="src/ListBasic/index.tsx" entry="src/ListBasic" defaultEntryName="ListBasic" />
+
+完整容器指南见 [scroll-view 与 list](/zh/guide/scroll-view-vs-list)。
+
+## `<page>` 根节点
+
+每个 Lynx 屏都有一个原生 [`<page>`](https://lynxjs.org/api/elements/built-in/page) 根。`render(() => <App />)` 自动挂到它下面，返回的 disposer 负责整体卸载：
+
+```tsx
+const dispose = render(() => <App />)
+// 稍后：
+dispose()
+```
+
+只有要给根绑 class、style、事件时才手写 `<page>`。一屏最多一个，放最外层。
+
+## 没有 DOM 全局对象
+
+`document`、`window`、`localStorage` 和 DOM 查询 API 都不存在。布局查询走 `lynx.createSelectorQuery()`（异步，后台线程）或主线程脚本（同步，主线程）。定时器双线程都有，但参数要箭头包装（见[介绍](/zh/guide/introduction)）。
+
+## 不支持的能力
+
+Web 专属、Lynx 无对等物的：
+
+| 能力 | 原因 | 替代 |
+|---|---|---|
+| React 专属模式（hooks 规则、并发渲染） | Solid 这里没有对应物 | — |
+| 路由级代码分割 | Lynx bundle 必须单文件（`performance.chunkSplit: 'all-in-one'`） | TanStack 文件路由只用 Generator 一半——见[路由](/zh/guide/routing) |
+| `key` 属性 | Solid 靠 `<For>` 按引用跟踪行，没有 `key` 属性 | 原生回收传 Lynx `item-key` |

@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Pure-tsc leaf: `tsc -b` emits per-file
+    // JS + .d.ts to dist/; dependents redirect here via references.
+    // The index no longer rides rslib (all its deps are external, so the
+    // "bundle" bundled nothing) — only jsx-lynx keeps an rslib entry.
+    "composite": true,
+    "rootDir": "src",
+    "allowImportingTsExtensions": false,
+    "declaration": true,
+    "declarationMap": false,
+    // Must countermand the dev config's noEmit:true (build extends dev):
+    // without this the composite silently emits nothing and dependents fail
+    // with TS6310/TS6305.
+    "noEmit": false,
+    // tsc emits even when typechecking fails by default; without this a
+    // failed build litters src/ with in-place outputs.
+    "noEmitOnError": true,
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,47 @@
+{
+  "name": "@lynx-solid/plugin",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "rsbuild plugin for @lynx-solid/runtime (entry splitting, worklet loaders, skeleton modules)",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./loaders/skeleton-loader": {
+      "default": "./dist/loaders/skeleton-loader.js"
+    },
+    "./loaders/worklet-mt-loader": {
+      "default": "./dist/loaders/worklet-mt-loader.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "typecheck": "tsc -b"
+  },
+  "peerDependencies": {
+    "@rspack/core": "catalog:"
+  },
+  "dependencies": {
+    "@lynx-js/react": "catalog:",
+    "@lynx-js/rsbuild-plugin": "catalog:",
+    "@lynx-js/runtime-wrapper-webpack-plugin": "catalog:",
+    "@lynx-js/template-webpack-plugin": "catalog:",
+    "@lynx-solid/compiler": "workspace:*",
+    "@lynx-solid/runtime": "workspace:*",
+    "@rsbuild/core": "catalog:",
+    "background-only": "^0.0.1",
+    "html-entities": "^2.6.0"
+  },
+  "devDependencies": {
+    "@rslib/core": "catalog:",
+    "typescript": "catalog:"
+  }
+}

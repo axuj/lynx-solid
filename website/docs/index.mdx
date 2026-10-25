@@ -1,0 +1,31 @@
+---
+pageType: home
+
+hero:
+  name: Lynx Solid
+  text: Solid 2 framework for building Lynx apps
+  tagline: Fine-grained reactivity on the background thread, static skeletons on the main thread — one INSTANTIATE per template instance, zero ops for static subtrees.
+  actions:
+    - theme: brand
+      text: Introduction
+      link: /guide/introduction
+    - theme: alt
+      text: Quick Start
+      link: /guide/quick-start
+  image:
+    src: /logo.svg
+    alt: Lynx Solid logo
+features:
+  - title: Solid 2 reactivity
+    details: Signals, memos, effects, stores and control flow work exactly as on the web — they come from solid-js directly, so your mental model carries over.
+    icon: ⚛️
+  - title: Dual-thread by construction
+    details: Solid runs on the background thread and drives the UI through batched ops; the main thread owns native elements. Latency-sensitive work escapes to Main Thread Script with zero round-trips.
+    icon: 🧵
+  - title: Static skeletons, dynamic holes
+    details: The compiler extracts static subtrees into main-thread skeletons at build time. Updates only touch what changed — count updates never re-send the layout.
+    icon: 🏗️
+  - title: Lynx-native elements
+    details: "view, text, image, scroll-view, list and inputs with Lynx bind*/catch* events and main-thread: worklet attributes, fully typed."
+    icon: 📱
+---

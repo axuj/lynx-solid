@@ -1,0 +1,35 @@
+# TodoMVC
+
+[TodoMVC](https://github.com/tastejs/todomvc) is the canonical benchmark for comparing JavaScript frameworks. We ported it as a validation target to verify signals, memos, `<For>` / `<Show>` and `bindtap` / `bindinput` / `bindconfirm` can carry a complete app — add, toggle, inline edit, filter and clear completed.
+
+<Go example="todomvc" defaultFile="src/TodoApp.tsx" />
+
+## Overview of Changes
+
+Most business logic transferred directly — signals (`createSignal`), derived state (`createMemo`), component patterns and list rendering work identically. Here's what changed:
+
+| Aspect | Original (Web) | Lynx Solid |
+|--------|----------------|------------|
+| **Template elements** | `<div>`, `<li>`, `<button>`, `<label>` | `<view>`, `<text>`, `<input>`, `<scroll-view>` |
+| **Events** | `@click`, `@keyup.enter` | `bindtap`, `bindconfirm` |
+| **Checkbox** | `<input type="checkbox">` | `<view>` + `bindtap` (no native checkbox in Lynx) |
+| **Filter routes** | 3 filter routes | `filter` signal (no router needed) |
+| **Array updates** | In-place mutation | Immutable signal updates (`map` / `filter` / spread) |
+| **CSS** | `todomvc-app-css` package | Custom `todomvc.css` (no pseudo-elements in Lynx) |
+
+## How Much of Solid Do We Reuse?
+
+| Layer | Source | Reuse |
+|-------|--------|-------|
+| **Reactivity** | `solid-js` | 100% official |
+| **Component system** | `solid-js` | 100% official (function components, `<For>`, `<Show>`) |
+| **Template compiler** | Fork of dom-expressions [`babel-plugin-jsx`](https://github.com/ryansolid/dom-expressions) (MIT) | Adapted (static skeletons + worklet directives for Lynx) |
+| **Dual-threaded renderer** | `@lynx-solid/runtime` (background) + main-thread interpreter | Custom |
+| **Bundler Plugin** | `@lynx-solid/plugin` | Custom (entry splitting, skeleton modules, worklet loaders) |
+
+The reactivity and component layers are used as-is. Custom code is the dual-thread pipeline on top: the compiler fork that extracts static skeletons, and the runtime + plugin that drive background reconciliation over ops. That split is what lets TodoMVC run unchanged at the business-logic level.
+
+## Porting Notes
+
+- **Controlled inputs**: Lynx `input` takes `value` as initial content; the app re-syncs it from the `newTodo` / `editText` signals on every keystroke (`bindinput`) and commits on `bindconfirm` / `bindblur`.
+- **Edit flow**: tapping a label swaps the row for an input (same as the web spec); confirming with empty text deletes the todo.

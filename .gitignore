@@ -1,0 +1,28 @@
+node_modules/
+dist/
+dist-dev/
+dist-ifr/
+.rspeedy/
+.tanstack/
+.eslintcache
+compile-lab/.build/
+
+
+*.tsbuildinfo
+
+# temp debug scripts
+.tmp-*
+
+# slot-level task progress (per-slot TASK.md, replaces TodoWrite; managed by start/finish-task scripts)
+TASK.md
+
+# benchmark run artifacts that regenerate every run (not worth tracking)
+packages/benchmark/results/smoke-*.png
+packages/benchmark/results/device-selftest-latest.*
+packages/benchmark/results/examples-sweep*.json
+packages/benchmark/results/examples-sweep*.md
+
+# MT-IFR: staged copies of solid's one-shot build, regenerated on every build
+# (see packages/plugin/src/index.ts — they exist so the MT swc pass, which
+# rsbuild's builtin JS rule does not apply inside node_modules, can reach them)
+.lynx-solid/

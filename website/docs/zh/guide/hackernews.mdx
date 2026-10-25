@@ -1,0 +1,30 @@
+# HackerNews
+
+HackerNews 客户端：feed 分页、帖子评论串、用户页，外加路由级 loading 态——体量介于计数器教程和完整 Elk 之间的中型案例。直连公开的 HackerNews JSON API，演示文件路由、异步查询、Lynx 列表渲染。
+
+<Go example="hackernews" defaultFile="src/index.tsx" />
+
+## 改动概览
+
+大部分代码可以直接迁移 —— 组件逻辑、文件路由、Solid 响应式完全一致。相对 Web 形态的改动如下：
+
+| 方面 | Web 形态 | Lynx Solid |
+|------|-----------|----------|
+| **模板元素** | `<div>`、`<span>`、`<img>`、`<a>` | `<view>`、`<text>`、`<image>`、tap 事件 |
+| **事件处理** | `onClick` | `bindtap` |
+| **路由历史** | History API | `createMemoryHistory()` |
+| **滚动** | 浏览器原生滚动 | `<list>` / `list-item`（带 `item-key`） |
+| **数据获取** | `fetch` + 本地状态 | `fetch` + signal（`use-hn-query` helper：缓存、去重） |
+| **构建工具** | Vite / Webpack | Rsbuild |
+| **SSR** | 服务端渲染 + 注水 | 无（Lynx 不使用 SSR）|
+
+## 怎么搭的
+
+- **文件路由**——`src/routes/` 映射到屏：`$feed.tsx` + `$feed.$page.tsx`（分页 feed）、`item.$id.tsx`（评论串）、`user.$id.tsx`（个人页），都在 `__root.tsx` 之下。路由表由 `@tanstack/router-plugin` 生成（只用 Generator 一半——不做代码分割，Lynx bundle 保持单文件）。
+- **内存历史**——`createMemoryHistory({ initialEntries: ['/news'] })` + `isServer: false`：Lynx 没有 History API，显式关掉能防止路由走 SSR 分支。见[路由](/zh/guide/routing)。
+- **异步查询**——`src/composables/use-hn-query.ts` 是 Solid 2 异步 helper（signal + 双参数 effect，模块缓存带过期时间，并发请求去重），对外暴露 data / isLoading / isFetching / isError；页面按 Web 应用的惯例渲染 `Spinner` → `NewsItem` / `Comment` 状态。
+- **Lynx 列表**——feed 走原生 `list` / `list-item`（带 `item-key`），长串滚动、回收都是原生的。
+
+## 证明了什么
+
+路由 + 异步 + 列表三者不需要 DOM 层面的变通手段即可组合：没有 `window.location`，没有 `URLSearchParams` 垫片（路由自带的查询解析器已覆盖），没有代码分割。如果你的应用符合这一形态——浏览列表、进入详情、翻页——可直接以 `src/router.tsx` 和 `src/routes/` 为起点。

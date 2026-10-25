@@ -1,0 +1,45 @@
+# Elk — Mastodon 客户端
+
+为了验证 Lynx Solid 能承载真正产品级的应用，我们把 [vue-lynx 的 Elk 示例](https://github.com/Huxpro/vue-lynx/tree/main/examples/elk)（Apache-2.0）移植成了一个**原生 Mastodon 客户端**——而这个示例本身又是 Anthony Fu 团队广受喜爱的 Mastodon Web 客户端 [Elk](https://github.com/elk-zone/elk)（MIT）的移植。我们复用了 Elk 中与框架无关的层次（masto.js API 客户端、Mastodon-HTML 内容管线、领域逻辑、主题），并在 Lynx 原生元素上重建了 UI。它以游客身份浏览任意公开 Mastodon 实例（默认 `mas.to`）：时间线、帖子串、个人页、搜索、趋势、深色模式等。
+
+在下方直接体验。**Web** 标签页通过 Lynx for Web 连接线上实例运行真实应用；**二维码**标签页原生运行同一个 bundle——用 Lynx Explorer 扫码即可（安装见[快速开始](/zh/guide/quick-start)）。
+
+<Go
+  example="elk"
+  defaultFile="src/App.tsx"
+  schema="{{{url}}}?fullscreen=true&bar_color=fafafa&bg_color=fafafa"
+/>
+
+## 挂载前先建游客会话
+
+`src/index.tsx` 在挂载之前先对默认公开实例建好匿名 masto.js 会话，首屏直接有时间线可看：
+
+```tsx title="src/index.tsx"
+import { mastoLogin } from './composables/masto'
+import { DEFAULT_SERVER } from './composables/users'
+
+// Anonymous session against the default public instance — Elk's guest mode.
+// Sign in from Settings (server + access token) for home/notifications/votes.
+mastoLogin({ server: DEFAULT_SERVER })
+
+render(() => <App />)
+```
+
+`App` 本体是路由的一层皮（`src/App.tsx` 只渲染 `<ElkRouter />`）。home 时间线、通知、点赞这些要登录的功能，去设置页填服务器 + token 解锁；其余全部游客可用。
+
+## 文件路由，内存历史
+
+`src/routes/` 一屏一文件——`home`、`notifications`、`search`、`settings`、`$server.public`、`$server.status.$id`……——由 `@tanstack/router-plugin` 生成（只用 Generator 一半，bundle 保持单文件），跑在 `createMemoryHistory` + `isServer: false` 上。完整套路见[路由](/zh/guide/routing)。
+
+## 把 Web 形数据渲染成原生元素
+
+两层把 Mastodon 的 Web 模型翻成 Lynx 元素：
+
+- **时间线**（`src/components/TimelinePage.tsx`、`CollectionPage.tsx`）走原生 `list` / `list-item`（带 `item-key`），长 feed 滚动回收都是原生的；分页状态在 `src/composables/paginator.ts`。
+- **正文**（`src/content/content-render.tsx`）用 ultrahtml 解析 Mastodon HTML，经 `contentToJSX()` 吐 `<text>` 片段——mention、话题、链接变成可点 span，块级标签变成堆叠文本块。全程没有 WebView。
+
+周围的 chrome——底部 tab（`NavBottom.tsx`）、页头、sheet——全是 Lynx 元素加 `bindtap` 跳转，整个应用是一棵元素树。
+
+## 证明了什么
+
+Elk 把所有东西一起练了：异步数据 + 路由 + 列表 + 媒体 + 设置持久化 + 深色模式。运行时改动只要 Elk 还是绿的，绑定就是产品就绪的。在预览的文件树里翻 70+ 源码——`src/composables/` 是领域逻辑，`src/components/` 是 UI 套件。

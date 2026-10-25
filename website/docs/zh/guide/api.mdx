@@ -1,0 +1,111 @@
+# API 总览
+
+`@lynx-solid/runtime`（后台入口）加 rsbuild 插件的公开表面——挂载、页面根与跨线程桥。响应式直接从 `solid-js` 导入；全量 API 见 `solid-js` 包内自带的 `CHEATSHEET.md`。
+
+## 渲染
+
+### `render(root): () => void`
+
+把组件树挂到 Lynx 页面根（双线程共同约定的那个节点）下，跑完当前响应式 flush。返回 disposer，调了整体卸载。
+
+```tsx
+import { render } from '@lynx-solid/runtime'
+
+const dispose = render(() => <App />)
+```
+
+### `createPageRoot()`
+
+建页面根 ShadowElement（id `1`）。一般用不到——`render` 内部已经建了——留给自己管根的宿主。
+
+## 主线程引用
+
+### `useMainThreadRef<T>(initValue: T): MainThreadRef<T>`
+
+建跨线程值绑定。后台线程看到的 `.current` 只是初始占位值；经 `main-thread:ref` 挂上后，主线程把它解析成活元素（或保存 worklet 侧状态）。见[主线程脚本](/zh/guide/main-thread-script)。
+
+```tsx
+const boxRef = useMainThreadRef<{ setStyleProperty: (k: string, v: string) => void } | null>(null)
+<view main-thread:ref={boxRef} … />
+```
+
+### `class MainThreadRef<T>`
+
+绑定本体：worklet 值 id（`_wvid`，经 ops 发到主线程）加 `.current`。跨线程序列化成 `{ _wvid }`。
+
+## 跨线程调用
+
+### `runOnMainThread(worklet)(...args): Promise<R>`
+
+后台调主线程 `'main thread'` worklet，等返回值。参数必须传 worklet 函数本身——运行时收到裸函数说明这个模块跳过了 worklet 编译，会响亮报错而不是挂起。
+
+```tsx
+function readMtClock(unit: string) {
+  'main thread'
+  return `pong-from-mt:${unit}`
+}
+
+const readClock = runOnMainThread(readMtClock)
+readClock('ms').then(v => console.log(v))
+```
+
+### `runOnBackground(handle)(...args): Promise<R>`
+
+`'main thread'` worklet 里调后台函数。后台侧只是个类型桩——编译器把每个调用点重写到主线程全局。传 `registerBgFunction` 的 handle，别传裸闭包。
+
+```tsx
+const saveRef = registerBgFunction((id: unknown) => save(id))
+
+function onTap() {
+  'main thread'
+  runOnBackground(saveRef)(currentId)
+}
+```
+
+### `registerBgFunction(fn): BgFnHandle`
+
+注册后台函数给 worklet 调。活 `_fn` 留在后台（永远不跨线程——序列化会丢掉）；派发按 `(execId, fnId)` 回来解析。
+
+### `transformToWorklet(fn): BgFnHandle`
+
+给 SWC 生成的 `_jsFn` 映射造同形 handle。handle 透传不双包；非函数输入产出 `{ _jsFnId, _error }` 描述符，调用时抛。
+
+## 模板 Helper
+
+### `ref`
+
+后台元素的 `ref` 回调口子，从模板模块重导出，给编译产物和高级用法。
+
+## 插件
+
+### `pluginSolidLynx(options?): RsbuildPlugin`
+
+rsbuild 插件。每个入口拆成后台入口（Solid 运行时 + 用户代码，自动前置接线桥的 bootstrap）和主线程入口（PAPI bootstrap + worklet 运行时 + 虚拟骨架模块），用打包 layer 隔离成两个 bundle。
+
+```ts
+import { pluginSolidLynx } from '@lynx-solid/plugin'
+
+export default defineConfig({
+  // …
+  plugins: [
+    pluginSolidLynx({
+      // 往编码模板注入 enableCSSInlineVariables，类驱动的
+      // CSS var 覆盖在真机才能重新级联。
+      enableCSSInlineVariables: true,
+      // 往编码模板注入 enableCSSInheritance：常规可继承属性
+      // （font-size、color……）父→子级联；自定义属性与该标志无关，无条件继承。
+      enableCSSInheritance: true,
+      // 裸 import 包白名单：这些包里的 'main thread' worklet
+      // 也要跟进 node_modules（与 vue-lynx 的 `includeWorkletPackages`
+      // 语义一致：https://github.com/Huxpro/vue-lynx）。
+      includeWorkletPackages: [],
+    }),
+  ],
+})
+```
+
+Lynx bundle 必须单文件——`performance.chunkSplit: 'all-in-one'` 别动（插件对别的会告警），`splitChunks: false` / `runtimeChunk: false` 配好。
+
+## JSX 内建元素
+
+`view`、`text`、`image`、`scroll-view`、`list`、`list-item`、`input`、`textarea`、`page`（另有 `svg` / `raw-text` 两个补充元素），props 来自 `@lynx-js/types`，另有 `main-thread:` worklet 命名空间。见 [TypeScript](/zh/guide/typescript) 与 [Solid 兼容性](/zh/guide/solid-compatibility)。

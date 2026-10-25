@@ -1,0 +1,144 @@
+import { PackageManagerTabs } from '@theme'
+
+# Routing (TanStack)
+
+Lynx Solid applications use [`@tanstack/solid-router`](https://tanstack.com/router), the type-safe router for Solid, for navigation between views. Since Lynx has no browser `window.location` or History API, you must use `createMemoryHistory()` — routing state lives entirely in-process.
+
+<Go example="hackernews" defaultFile="src/router.tsx" />
+
+## Installing Dependencies
+
+<PackageManagerTabs command="install @tanstack/solid-router" />
+
+For file-based routing (one file per screen, like the showcases), also add the generator plugin:
+
+<PackageManagerTabs command="install -D @tanstack/router-plugin" />
+
+## Creating the Router
+
+Use `createMemoryHistory()` to create a history instance with no dependency on browser APIs, and opt out of the router's server path explicitly — on Lynx, `document` reads as `undefined`, which the router would otherwise misread as "server environment":
+
+```ts title="src/router.tsx"
+import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/solid-router'
+import { routeTree } from './routeTree.gen'
+
+// Memory history is required: Lynx has no browser History API.
+const history = createMemoryHistory({ initialEntries: ['/news'] })
+
+const router = createRouter({
+  routeTree,
+  history,
+  // Lynx-side `document` is undefined — without this the router
+  // takes its SSR path.
+  isServer: false,
+})
+
+declare module '@tanstack/solid-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+
+export function HackerNewsRouter() {
+  return <RouterProvider router={router} />
+}
+```
+
+Then mount it like any other component:
+
+```tsx title="src/index.tsx"
+import { render } from '@lynx-solid/runtime'
+import { HackerNewsRouter } from './router'
+
+render(() => <HackerNewsRouter />)
+```
+
+## File-based Routes
+
+With `@tanstack/router-plugin` (Generator half only) in `rsbuild.config.ts`, each file under `src/routes/` becomes a route — `__root.tsx` is the shell, `$feed.tsx` a param route, `item.$id.tsx` a detail page:
+
+```ts title="rsbuild.config.ts"
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { TanStackRouterGeneratorRspack } from '@tanstack/router-plugin/rspack'
+
+const root = path.dirname(fileURLToPath(import.meta.url))
+
+export default defineConfig({
+  // …
+  tools: {
+    rspack: {
+      plugins: [
+        TanStackRouterGeneratorRspack({
+          target: 'solid',
+          routesDirectory: path.resolve(root, 'src/routes'),
+          generatedRouteTree: path.resolve(root, 'src/routeTree.gen.ts'),
+        }),
+      ],
+      optimization: {
+        splitChunks: false,
+        runtimeChunk: false,
+      },
+    },
+  },
+})
+```
+
+:::warning Single-file bundles only
+Never enable the plugin's CodeSplitter half: Lynx bundles must stay
+single-file (`splitChunks: false`, `runtimeChunk: false`, and the Lynx engine
+`performance.chunkSplit: 'all-in-one'`). Async chunks would strand modules
+in files the template never loads.
+:::
+
+## Navigating Without `<a>` Tags
+
+Lynx has no `<a>` element. Navigate from `bindtap` handlers instead — the showcases wrap the router in a tiny imperative bridge so call sites never touch router internals:
+
+```tsx title="src/router.tsx"
+export function push(to: string) {
+  router.navigate({ to })
+}
+
+export function back() {
+  router.history.back()
+}
+```
+
+```tsx
+import { push } from './router'
+
+<text bindtap={() => push(`/item/${id}`)}>
+  {title()}
+</text>
+```
+
+A reactive `currentPath()` (a signal fed by `history.subscribe`) drives tab-bar active states without any router-coupled components.
+
+## Dynamic Route Params
+
+Access dynamic route params with the route's `useParams()`:
+
+```tsx title="src/routes/item.$id.tsx"
+export const Route = createFileRoute('/item/$id')({
+  component: () => {
+    const params = Route.useParams()
+    return <ItemPage itemId={Number(params().id)} />
+  },
+})
+```
+
+## Why Memory History?
+
+| History mode | Needs browser APIs | Works on Lynx |
+| --- | --- | --- |
+| `createBrowserHistory()` | Yes (`window.location`, History API) | No |
+| `createHashHistory()` | Yes (`window.location`) | No |
+| `createMemoryHistory()` | No | **Yes** |
+
+`createMemoryHistory()` is designed for environments without a browser. Routing state lives in a plain in-memory array, so `router.navigate()`, `router.history.back()` and dynamic params all work.
+
+## Examples
+
+- [HackerNews](/guide/hackernews) — feeds, threads, profiles on five file routes
+- [Elk](/guide/elk) — 15+ screens (home, search, settings, per-server timelines) on the same pattern

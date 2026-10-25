@@ -1,0 +1,143 @@
+import { PackageManagerTabs } from '@theme'
+
+# 路由（TanStack）
+
+Lynx Solid 应用用 Solid 的类型安全路由 [`@tanstack/solid-router`](https://tanstack.com/router) 管理屏间导航。Lynx 没有浏览器 `window.location` 和 History API，所以必须用 `createMemoryHistory()`——路由状态完全活在进程里。
+
+<Go example="hackernews" defaultFile="src/router.tsx" />
+
+## 装依赖
+
+<PackageManagerTabs command="install @tanstack/solid-router" />
+
+文件路由（一屏一文件，和案例一样）再加生成器插件：
+
+<PackageManagerTabs command="install -D @tanstack/router-plugin" />
+
+## 建路由
+
+用 `createMemoryHistory()` 建与浏览器 API 无关的历史实例，并显式关掉路由的 server 分支——Lynx 侧 `document` 读出来是 `undefined`，不关的话路由会误判成“服务端环境”：
+
+```ts title="src/router.tsx"
+import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/solid-router'
+import { routeTree } from './routeTree.gen'
+
+// 必须用内存历史：Lynx 没有浏览器 History API。
+const history = createMemoryHistory({ initialEntries: ['/news'] })
+
+const router = createRouter({
+  routeTree,
+  history,
+  // Lynx 侧 `document` 是 undefined——不关这个路由会走 SSR 分支。
+  isServer: false,
+})
+
+declare module '@tanstack/solid-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+
+export function HackerNewsRouter() {
+  return <RouterProvider router={router} />
+}
+```
+
+然后像普通组件一样挂载：
+
+```tsx title="src/index.tsx"
+import { render } from '@lynx-solid/runtime'
+import { HackerNewsRouter } from './router'
+
+render(() => <HackerNewsRouter />)
+```
+
+## 文件路由
+
+`rsbuild.config.ts` 里配 `@tanstack/router-plugin`（只用 Generator 一半），`src/routes/` 下一文件一路由——`__root.tsx` 是壳，`$feed.tsx` 是参数路由，`item.$id.tsx` 是详情页：
+
+```ts title="rsbuild.config.ts"
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { TanStackRouterGeneratorRspack } from '@tanstack/router-plugin/rspack'
+
+const root = path.dirname(fileURLToPath(import.meta.url))
+
+export default defineConfig({
+  // …
+  tools: {
+    rspack: {
+      plugins: [
+        TanStackRouterGeneratorRspack({
+          target: 'solid',
+          routesDirectory: path.resolve(root, 'src/routes'),
+          generatedRouteTree: path.resolve(root, 'src/routeTree.gen.ts'),
+        }),
+      ],
+      optimization: {
+        splitChunks: false,
+        runtimeChunk: false,
+      },
+    },
+  },
+})
+```
+
+:::warning bundle 必须单文件
+不要开插件的 CodeSplitter 一半：Lynx bundle 必须单文件
+（`splitChunks: false`、`runtimeChunk: false`，rsbuild 侧
+`performance.chunkSplit: 'all-in-one'`）。异步 chunk 会把模块扔到模板
+永远不加载的文件里。
+:::
+
+## 没有 `<a>` 怎么跳
+
+Lynx 没有 `<a>` 元素。在 `bindtap` 处理器里跳转——案例在路由上包了一层轻量命令式封装，调用方无需接触路由内部：
+
+```tsx title="src/router.tsx"
+export function push(to: string) {
+  router.navigate({ to })
+}
+
+export function back() {
+  router.history.back()
+}
+```
+
+```tsx
+import { push } from './router'
+
+<text bindtap={() => push(`/item/${id}`)}>
+  {title()}
+</text>
+```
+
+tab 栏高亮靠响应式的 `currentPath()`（`history.subscribe` 喂的 signal），不依赖任何路由耦合组件。
+
+## 动态路由参数
+
+通过路由的 `useParams()` 访问动态路由参数：
+
+```tsx title="src/routes/item.$id.tsx"
+export const Route = createFileRoute('/item/$id')({
+  component: () => {
+    const params = Route.useParams()
+    return <ItemPage itemId={Number(params().id)} />
+  },
+})
+```
+
+## 为什么使用 Memory History？
+
+| History 模式 | 需要浏览器 API | 在 Lynx 中可用 |
+| --- | --- | --- |
+| `createBrowserHistory()` | 是（`window.location`、History API） | 否 |
+| `createHashHistory()` | 是（`window.location`） | 否 |
+| `createMemoryHistory()` | 否 | **是** |
+
+`createMemoryHistory()` 专为没有浏览器的环境设计。路由状态存储在一个简单的内存数组中，因此 `router.navigate()`、`router.history.back()` 和动态参数等功能都能正常工作。
+
+## 案例
+
+- [HackerNews](/zh/guide/hackernews)——五个文件路由上的 feed、帖子串、个人页
+- [Elk](/zh/guide/elk)——同一套路上的 15+ 屏（home、搜索、设置、各站时间线）

@@ -1,0 +1,106 @@
+# TypeScript
+
+Lynx Solid supports TypeScript out of the box. Because reactivity is the standard Solid 2 runtime (`solid-js`), all of Solid's TypeScript features work as documented — signals, stores, control flow and component props type-check normally.
+
+This page covers what's specific to Lynx Solid: JSX resolution for Lynx built-in elements, event types, and the `main-thread:ref` typing.
+
+:::tip Prerequisite: Rsbuild TypeScript setup
+Before configuring Lynx Solid types, make sure your project has the base TypeScript setup in place -- `typescript` in `devDependencies`, `jsx: preserve` so the plugin's compiler consumes the JSX, and `jsxImportSource`. See the [TypeScript setup guide](https://lynxjs.org/rspeedy/typescript.html) for details.
+:::
+
+## Lynx Element Types
+
+By default, TS 5.9 resolves JSX against the *global* `JSX` namespace. `@lynx-solid/runtime` extends that namespace with Lynx intrinsics, so `<view>` and `<text>` resolve to Lynx types instead of HTML. Element props come straight from `@lynx-js/types`, so the [Lynx element docs](https://lynxjs.org/guide/ui/elements-components.html) are the prop reference.
+
+Add the following to your source-level `tsconfig.json`:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "@lynx-solid/runtime",
+    "lib": ["ES2022", "DOM"],
+    "types": ["vite/client"],
+    "noEmit": true
+  },
+  "include": ["src"]
+}
+```
+
+**What each option does:**
+
+- `"jsx": "preserve"` — `tsc` never touches JSX; the forked [dom-expressions](https://github.com/ryansolid/dom-expressions) compiler consumes it.
+- `"jsxImportSource": "@lynx-solid/runtime"` — selects the Lynx `JSX.IntrinsicElements` (Solid 2 + TS 5.9 resolve JSX from the *global* `JSX` namespace, which the runtime extends) instead of HTML.
+- `"types": ["vite/client"]` — device/web targets are never node: excluding `@types/node` keeps the DOM timer signatures (`setTimeout → number`), matching on-device behavior.
+
+With this setup, your IDE will provide prop autocomplete, event autocomplete, and type errors for all Lynx elements.
+
+### Example
+
+Here's a typical component using typed props with Lynx elements:
+
+```tsx title="src/Row.tsx"
+import type { ScrollEvent, ViewProps } from '@lynx-js/types'
+
+function Row(props: ViewProps & { size: number }) {
+  const onScroll = (e: ScrollEvent) => {
+    console.log(e.detail.scrollTop)
+  }
+  return (
+    <scroll-view bindscroll={onScroll} scroll-y …>
+      <view {...props} />
+    </scroll-view>
+  )
+}
+```
+
+In this example, `<scroll-view>` and `<view>` all have full IntelliSense — `scroll-y` is typed, `bindscroll` is recognized as a valid event, and misspelled props would produce a type error.
+
+Consequences of the Lynx-first model:
+
+- **No `on*` aliases** — `onClick` does not type-check and is not translated at runtime. Use `bindtap` / `catchtap` / `bindscroll` / `bindinput`.
+- **`children` is loose** (`unknown`) with a `ref` callback seam, mirroring Solid's own `ElementChildrenAttribute`.
+- **`input` / `textarea` accept `value`** — the native runtime treats it as initial content, and the official types package only declares `default-value`, so the runtime augments both. There is also an `InputEvent` alias for `bindinput` handlers.
+
+## Event Types
+
+Lynx uses the `bind*` convention for events (e.g., `bindtap`, `bindtouchstart`). There is intentionally no mapping to DOM-style `on*` names — a Lynx event is not a DOM event:
+
+| Lynx | Status in Lynx Solid |
+|------|----------------------|
+| `bindtap` | `bindtap={fn}` |
+| `bindtouchstart` | `bindtouchstart={fn}` |
+| `bindlayoutchange` | `bindlayoutchange={fn}` |
+| `main-thread:bindtap` | `main-thread:bindtap={fn}` (worklet, must carry `'main thread'`) |
+
+All event handler types are preserved from `@lynx-js/types`, so you get full type checking on event callback parameters.
+
+## Main Thread Typing
+
+`main-thread:ref` lives on every Lynx element via a `StandardProps` augmentation, typed with the ref class (not a DOM `Ref`):
+
+```tsx
+import { useMainThreadRef } from '@lynx-solid/runtime'
+
+const boxRef = useMainThreadRef<{
+  setStyleProperty: (name: string, value: string) => void
+} | null>(null)
+
+<view main-thread:ref={boxRef} … />
+```
+
+Worklet events are typed from the same props the background handlers use: the `main-thread:bindscroll` family derives from `ScrollViewProps`' `bind*` counterparts, and touch/layout handlers (`main-thread:bindtouchstart`, `main-thread:bindlayoutchange`, …) accept plain event objects. A worklet handler that forgets its `'main thread'` directive still type-checks (the directive is a runtime/compiler contract), so the [capture rules](/guide/main-thread-script) are enforced by the build, not the types.
+
+## Type Checking
+
+Use `tsc --noEmit` for command-line type checking:
+
+```bash
+npx tsc --noEmit -p ./tsconfig.json
+```
+
+This validates your Lynx element usage, props, and events against the type declarations. Custom globals on `globalThis` use the typed declarations in `@lynx-solid/runtime` internals — never `globalThis as Record<string, unknown>` casts. Engine-injected PAPI (`__CreateElement`, …) is declared separately from the app-level globals (`lynx`, timers, `BroadcastChannel`).
+
+## Typing the Host Boundary
+
+Device/web targets are never node: excluding `@types/node` keeps the DOM timer signatures (`setTimeout → number`), matching on-device behavior. The runtime package's own tsconfig adds `types: ["@lynx-js/types", "@lynx-js/type-element-api"]` for engine surfaces (`lynx`, `SystemInfo`, `rAF`); the *type* declarations for timer/console/`queueMicrotask`/`BroadcastChannel` globals come from the runtime's `env.d.ts` (types only — the runtime ships just the `queueMicrotask` guard), shaped from the official interfaces rather than hand-copied.

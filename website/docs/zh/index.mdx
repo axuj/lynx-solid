@@ -1,0 +1,31 @@
+---
+pageType: home
+
+hero:
+  name: Lynx Solid
+  text: 使用 Solid 2 构建 Lynx 应用的框架
+  tagline: 后台线程跑细粒度响应式，主线程放静态骨架——每个模板实例一次 INSTANTIATE，静态子树零 ops。
+  actions:
+    - theme: brand
+      text: 介绍
+      link: /zh/guide/introduction
+    - theme: alt
+      text: 快速开始
+      link: /zh/guide/quick-start
+  image:
+    src: /logo.svg
+    alt: Lynx Solid logo
+features:
+  - title: Solid 2 响应式
+    details: signal、memo、effect、store 与控制流在 Web 端怎么写在这里就怎么写——直接来自 solid-js，心智模型直接沿用。
+    icon: ⚛️
+  - title: 天生双线程
+    details: Solid 跑在后台线程，通过批量 ops 驱动 UI；主线程拥有原生元素。延迟敏感的交互用主线程脚本逃逸，零往返。
+    icon: 🧵
+  - title: 静态骨架，动态开孔
+    details: 编译期把静态子树抽成主线程骨架，更新只碰变化的部分——数字变化不会重发整个布局。
+    icon: 🏗️
+  - title: Lynx 原生元素
+    details: "view、text、image、scroll-view、list 与输入组件，bind*/catch* 事件与 main-thread: worklet 属性全量类型化。"
+    icon: 📱
+---

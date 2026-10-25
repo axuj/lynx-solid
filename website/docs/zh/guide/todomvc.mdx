@@ -1,0 +1,35 @@
+# TodoMVC
+
+[TodoMVC](https://github.com/tastejs/todomvc) 是比较 JavaScript 框架的经典基准。我们将其移植过来做验证目标，以验证 signal、memo、`<For>` / `<Show>` 与 `bindtap` / `bindinput` / `bindconfirm` 能否撑起完整应用——新增、勾选、行内编辑、过滤、清空已完成。
+
+<Go example="todomvc" defaultFile="src/TodoApp.tsx" />
+
+## 改动概览
+
+大部分业务逻辑可以直接迁移 —— signal（`createSignal`）、派生状态（`createMemo`）、组件划分、列表渲染写法一致。以下是我们做的改动：
+
+| 方面 | 原版（Web） | Lynx Solid |
+|------|------------|----------|
+| **模板元素** | `<div>`、`<li>`、`<button>`、`<label>` | `<view>`、`<text>`、`<input>`、`<scroll-view>` |
+| **事件** | `@click`、`@keyup.enter` | `bindtap`、`bindconfirm` |
+| **复选框** | `<input type="checkbox">` | `<view>` + `bindtap`（Lynx 没有原生复选框） |
+| **过滤路由** | 3 条过滤路由 | `filter` signal（不需要路由） |
+| **数组更新** | 原地修改 | signal 不可变更新（`map` / `filter` / spread） |
+| **CSS** | `todomvc-app-css` 包 | 自定义 `todomvc.css`（Lynx 不支持伪元素） |
+
+## 我们复用了多少 Solid？
+
+| 层级 | 来源 | 复用情况 |
+|------|------|----------|
+| **响应式系统** | `solid-js` | 100% 官方 |
+| **组件系统** | `solid-js` | 100% 官方（函数组件、`<For>`、`<Show>`） |
+| **模板编译器** | dom-expressions [`babel-plugin-jsx`](https://github.com/ryansolid/dom-expressions)（MIT）的 fork | 改造过（为 Lynx 抽静态骨架 + worklet 指令） |
+| **双线程渲染器** | `@lynx-solid/runtime`（后台）+ 主线程解释器 | 自研 |
+| **打包插件** | `@lynx-solid/plugin` | 自研（入口拆分、骨架模块、worklet loader） |
+
+响应式与组件层原样使用。自研的是之上的双线程管线：抽静态骨架的编译器 fork，以及经由 ops 驱动后台调度的运行时 + 插件。这验证了我们的思路：在 Solid 响应式之上实现双线程渲染管线、对接 Lynx 原生引擎是一条可行的道路。
+
+## 移植说明
+
+- **受控输入**：Lynx `input` 的 `value` 是初始内容；应用在每次输入（`bindinput`）时将 `newTodo` / `editText` signal 的值写回，`bindconfirm` / `bindblur` 时提交。
+- **编辑流程**：点击 label 将整行切换为输入框（和 Web 规范一致）；空文本确认等于删除该项。

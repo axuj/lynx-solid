@@ -1,0 +1,22 @@
+{
+  "name": "@lynx-solid/dev-networking",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "rsbuild build",
+    "typecheck": "tsc --noEmit -p ./tsconfig.json"
+  },
+  "dependencies": {
+    "@lynx-solid/plugin": "workspace:*",
+    "@lynx-solid/runtime": "workspace:*",
+    "@tanstack/solid-query": "6.0.0-rc.5",
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "@lynx-js/rsbuild-plugin": "catalog:",
+    "@lynx-js/types": "catalog:",
+    "@rsbuild/core": "catalog:",
+    "typescript": "catalog:"
+  }
+}

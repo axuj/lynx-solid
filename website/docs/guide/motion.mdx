@@ -1,0 +1,113 @@
+# Motion
+
+export const sliderGesture = {
+  // Desktop web previews are driven by a mouse; the slider binds touch
+  // events, so without help it reads as a still image. These synthesized
+  // touches drag the pad down and back with a device-simulator contact
+  // point. The first real touch or pointer hands control back.
+  loop: true,
+  startDelayMs: 1400,
+  steps: [
+    {
+      path: [
+        { x: 0.5, y: 0.35 },
+        { x: 0.5, y: 0.72 },
+      ],
+      durationMs: 700,
+      restMs: 1600,
+    },
+    {
+      path: [
+        { x: 0.5, y: 0.72 },
+        { x: 0.5, y: 0.35 },
+      ],
+      durationMs: 700,
+      restMs: 2000,
+    },
+  ],
+};
+
+Animation demos driven by [`motion-dom`](https://motion.dev/) on the main thread — ported from ReactLynx's [`examples/motion`](https://github.com/lynx-family/lynx-examples/tree/main/examples/motion), part of the official [lynx-examples](https://github.com/lynx-family/lynx-examples) collection (Apache-2.0). Each case below is its own entry; everything visual stays on the main thread (zero ops, zero round trips).
+
+`@lynx-js/motion` is a thin adapter that reuses Motion's source and brings its imperative JavaScript API to Lynx. We don't depend on that package (both of its entries pull `@lynx-js/react` runtime imports — see [why not](#why-not-lynx-jsmotion-directly)), so this demo imports `motion-dom` directly plus a vendored adapter slice (`src/adapters/`, ported from [`@lynx-js/motion`](https://github.com/lynx-family/lynx-stack), Apache-2.0). If you have used Motion's `animate()`, `motionValue()`, and `spring` on the web, the usage here is the same. New to Motion? Start with the [Motion quick-start guide](https://motion.dev/docs/quick-start).
+
+## Install
+
+```bash
+nub add motion-dom
+```
+
+A case enters the shared graph through the single `../adapters` root edge (the root edge carries `with { runtime: 'shared' }` explicitly; everything the barrel then imports follows onto the shared layer transitively — see [Main Thread Script](/guide/main-thread-script#cross-thread-shared-modules)):
+
+```ts title="src/Basic/index.tsx"
+import { animateEl } from '../adapters' with { runtime: 'shared' }
+```
+
+## Animate an element ref
+
+`animateEl` runs scale + rotate through the engine. The pattern, copied from the official docs:
+
+1. Create the element reference with `useMainThreadRef()`.
+2. Attach it with `main-thread:ref`.
+3. Call `animateEl()` inside a main thread function to start the animation.
+
+<Go example="motion" entry="src/Basic" defaultFile="src/Basic/index.tsx" defaultEntryName="basic" />
+
+`animate()` accepts the same [options](https://motion.dev/docs/animate#options) as Motion on the web, including `duration`, `ease`, and `delay`. One rule: always use explicit `[from, to]` keyframes — single-value `"to"` keyframes force the engine to read current styles through the global `getComputedStyle`, which rejects proxy subjects on web hosts and silently kills the animation.
+
+## Use Springs
+
+When a value should converge with spring physics instead of following a fixed-duration easing curve, pass a spring transition. All Motion [spring options](https://motion.dev/docs/spring) are supported, including `stiffness`, `damping`, and `mass`:
+
+<Go example="motion" entry="src/Spring" defaultFile="src/Spring/index.tsx" defaultEntryName="spring" />
+
+The spring case auto-starts an engine-owned rotate loop: `animateEl` with `type: 'spring'`, `repeat: Infinity`, and a short `repeatDelay` between settles — the frame loop stays inside motion-dom (no hand-rolled driver).
+
+## Use Motion Values
+
+[`motionValue()`](https://motion.dev/docs/motion-value) holds a value that can be animated directly and subscribed to. Use it when multiple effects or handlers need to share one animated value:
+
+<Go example="motion" entry="src/MotionValue" defaultFile="src/MotionValue/index.tsx" defaultEntryName="motion-value" />
+
+## Build Gesture Effects
+
+For high-frequency touch input, keep handlers on the main thread with `main-thread:bindtouchstart`, `main-thread:bindtouchmove`, and `main-thread:bindtouchend`. Combined with MotionValues and `styleEffect()`, visual state derives from gesture state:
+
+<Go example="motion" entry="src/iOSSlider" defaultFile="src/iOSSlider/index.tsx" defaultEntryName="gesture" autoGesture={sliderGesture} />
+
+Differences vs the official iOSSlider: `useMotionValueRef` replaced with worklet-side creation + ref holding; `progress`/`clamp` are two-line locals (`motion-dom` lacks them — they live in the `motion` package, which needs React peers). The directory and entry names match [lynx-examples](https://github.com/lynx-family/lynx-examples) (Apache-2.0); this demo also shows a live brightness percentage (official has none).
+
+:::info
+Motion's web-only gesture APIs, such as `scroll()`, `inView()`, `hover()`, and `press()`, are not included here. Use the main-thread touch events shown above instead.
+:::
+
+## Why not `@lynx-js/motion` directly
+
+Three obstacles, each hit in practice:
+
+1. **It drags in the React runtime.** Both entries (`.` and `./mini`) reach `@lynx-js/react` runtime imports through their hooks chain, so depending on the package pulls the React runtime into the repo.
+2. **Tree-shaking can't stop the type pollution.** TypeScript follows the type chain into `framer-motion`'s type definitions, whose global JSX augmentation rewrites the JSX namespace of every file (`Element` vs `ReactNode`) — every file that writes JSX fails `tsc`.
+3. **`animate` itself depends on React.** The `motion` package lists React as a peer dependency.
+
+So this demo vendors only the React-free adapter files (`src/adapters/`) and keeps a single dependency: the pure upstream `motion-dom`.
+
+## Device pitfalls
+
+- **`queueMicrotask`**: `motion-dom`'s frameloop reads it at module-eval time, and the bare global is **not guaranteed per thread** — measured on a Kirin 970 device / Lynx SDK 4.0 the BG has none while the MT ships one. So it is mounted in two layers: the runtime's `queue-microtask-shim` (first import of the BG bootstrap; it mounts a forwarder to the engine's `lynx.queueMicrotask`) plus this example's `src/adapters/shim-entry.ts` — the official `@lynx-js/motion` gate (engine-provided `__MAIN_THREAD__` / `__DEV__` macros select the full facade / the queue fallback; no capability probing). Shim-before-`motion-dom` evaluation is structural: every module that value-imports `motion-dom` (`src/adapters/motion.ts`, `src/adapters/index.ts`) carries a bare `import './shim-entry'` — the shared-layer cascade marks that edge at build time (its importer is already on the layer; total closure: values, bare side-effects, re-exports, no source rewriting) — and Plan B freezes that line in place so the gate always runs first; cases enter through `../adapters` and need no import-order discipline. If a future third-party import crashes the same way, check the main-thread bundle for module-eval-time bare globals first.
+- **`performance`**: the engine's clock reads it lazily on first animation. The same shim file covers it — installs a `now()` facade only when `globalThis.performance` is missing and skips when one exists (device MT may carry a `window` stub; never overwrite a host-provided implementation); installation is gated by the official `__MAIN_THREAD__` / `__DEV__` macros (the same gate as above — no capability probing, which misreads `window` stubs).
+- **Key spelling depends on the surface.** `style` **objects** (static or dynamic) accept **camelCase** — the engine converts keys on its object path (`FiberSetInlineStyles` runs `CamelCaseToDashCase`), and the compiler keeps static objects as objects, so they never fall into the string path. CSS **strings** (`style="…"` / template literals) are parsed raw and must be kebab — a camelCase string key (`fontStyle:italic`) is silently dropped. The imperative `el.setStyleProperty(name, v)` also takes a kebab `name`.
+
+## Files
+
+| File | Role |
+|---|---|
+| `src/Basic/index.tsx` | Element reverse loop (scale + rotate, auto-start) |
+| `src/Spring/index.tsx` | Engine spring rotate loop (auto-start) |
+| `src/MotionValue/index.tsx` | Shared MotionValue + reverse-loop `animate()` |
+| `src/iOSSlider/index.tsx` | Gesture-driven slider + styleEffect bindings |
+| `src/shared/ThemeFrame.tsx` | Theme chrome (port of [lynx-examples](https://github.com/lynx-family/lynx-examples), Apache-2.0 — no `useGlobalProps`) |
+| `src/adapters/index.ts` | Public barrel — cases pull the whole API through a single `../adapters` shared root edge |
+| `src/adapters/element.ts` | `ElementCompt` class (split out of shim-entry so the gate stays a pure side-effect file) |
+| `src/adapters/motion.ts` | `animateEl` / `animateMv` / `tween` / `colorMixer` / `styleEffect` / `springValueTo` (A2 shared: value-imports `shim-entry` via `with { runtime: 'shared' }`) |
+| `src/adapters/shim-entry.ts` | Facades + install call (official `__MAIN_THREAD__` / `__DEV__` macro gate; installs only when missing, never overwrites) |
+| `rsbuild.config.ts` | Four entries (`basic` / `spring` / `motion-value` / `gesture`) |

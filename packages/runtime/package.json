@@ -1,0 +1,54 @@
+{
+  "name": "@lynx-solid/runtime",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Solid 2 runtime for Lynx — background + main-thread + shared ops protocol",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./jsx-runtime": {
+      "types": "./dist/jsx-runtime.d.ts",
+      "default": "./dist/jsx-runtime.js"
+    },
+    "./lynx-template": {
+      "types": "./dist/background/lynx-template.d.ts",
+      "default": "./dist/background/lynx-template.js"
+    },
+    "./main-thread": {
+      "types": "./dist/main-thread/index.d.ts",
+      "default": "./dist/main-thread/index.js"
+    },
+    "./ifr-runtime": {
+      "types": "./dist/main-thread/ifr-runtime.d.ts",
+      "default": "./dist/main-thread/ifr-runtime.js"
+    },
+    "./bootstrap": {
+      "types": "./dist/background/bootstrap.d.ts",
+      "default": "./dist/background/bootstrap.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@solidjs/universal": "catalog:",
+    "background-only": "^0.0.1",
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "@dom-expressions/runtime": "0.50.0-next.44",
+    "@lynx-js/type-element-api": "0.0.10",
+    "@lynx-js/types": "catalog:",
+    "typescript": "catalog:"
+  }
+}

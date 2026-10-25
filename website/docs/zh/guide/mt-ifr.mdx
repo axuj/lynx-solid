@@ -1,0 +1,413 @@
+# MT-IFR（`enableMtIfr`）：主线程自己画的首屏
+
+import { Badge } from '@theme'
+
+<Badge text="默认关闭" type="warning" />
+
+> 下面每个数字都来自一组特定设备、一套构建配置与一份 workload，请当作参考值而不是普适结论。换一台设备、换一种
+> 应用形态或包体规模，结果都可能有明显差别，所以请读**同一窗口内**的 Δ，而不是绝对值。文中出现的 ReactLynx
+> 仅作为校准基准——一个成熟的双线程 Lynx 渲染器，用来给测量定标——这并不构成对那个项目的任何评价。
+
+:::warning 摘要
+`enableMtIfr` **默认关闭**、完全可选。打开后**主线程自己渲染首屏**，而后台的首批 ops 与主线程已画出的树做
+**对账（reconcile）**，命中就直接消费掉、不再重放。
+
+**它在真机上功能正确，但目前比两个对照都更慢。** 低端机（Kirin 970，Geekbench 6 单核 ≈ 420）、从进程创建算起、1000 行、
+同一窗口内三臂交替、n=11：
+
+| 臂 | 中位数 | IQR | 未成立 |
+|---|---|---|---|
+| 自家默认（IFR 关） | **2262ms** | [2161, 2310] | 无 |
+| 自家 IFR（IFR 开） | 3174ms | [3146, 3255] | 无 |
+| ReactLynx | 3582ms | [3564, 3615] | 无 |
+
+Δ IFR − 默认 = **+912ms**：IFR 输给自家默认路径。Δ ReactLynx − IFR = +408ms 只在这个规模成立 —— ReactLynx
+的**每行代价是三者中最高的**，所以首屏小的时候快慢会反过来（见下方行数扫点：小屏最快的是 ReactLynx，不是 IFR）。
+本窗口每一轮都成立，没有重发或空缺。
+
+这个代价是结构性的，不是缺陷：IFR 把首屏渲染从 V8 挪到主线程的 PrimJS（Lepus，无 JIT），于是同一份活每行都更贵。
+它省掉的（后台启动链的尾巴）在这个规模上小于这笔开销。对账是**之后**的一步，不进入被测数值（见下方「为什么现在更贵」）。
+
+:::
+
+## `enableMtIfr` 做了什么
+
+打开后，**主线程在 `renderPage` 期间自己渲染首屏**，而不是先显示空页面、等后台 bundle 启动完成再把 ops 跨线程送过来。
+
+- 主线程拿到**完整的组件图**（不再被 `worklet-mt-loader` 削成 import shell），且 `solid-js` 在主线程上解析为它的
+  **server 构建**：一次性求值器 —— signal setter 只警告不改值、render effect 同步执行、没有调度器。**主线程上不跑
+  响应式图、也不跑 effect。**
+- 主线程**在渲染器产生效果的同时直接落到 PAPI**（direct emission，`main-thread/direct-sink.ts`）：一趟过，没有 op
+  流要走、没有重放。帧仍然被记录下来 —— 作为下面那份对账要读的报告。
+- 后台首批到达后，与主线程已画出的树**逐帧 diff**（`main-thread/hydrate.ts`）：**完全一致 → 什么都不用做**；身份相同、
+  值不同 → 把后台的帧**原地**打到主线程的树上（不拆树、不闪）；结构发散 → 拆掉主线程的树、重放后台那一批。
+
+真机上 1000 行时两遍渲染是一致的，所以走的是「免费」分支：主线程记录里有与后台发出的**同一份** `29048` 个数（数组
+长度）、覆盖 `1001` 个 `INSTANTIATE` 帧（每行模板一个 + 页面模板一个），对账报 `match`。
+
+## 测量口径
+
+> 本节的定义管辖全页数字。
+
+| | |
+|---|---|
+| 起点 | `logcat -b events` 的 `am_proc_start` —— 进程确实被 fork 了。不用 `LynxShell create`：那已在进程创建、库映射与引擎初始化之后（本轮只占真实冷启的 44%） |
+| 终点 | **第一个** `Time taken` ≥ **1.5ms** 的 `layout finish with result size`。引擎会先为空页面布局一次，这道门就是全部判别力：两台上实测空页 0.03–1.00ms、内容 2.18–12.3ms。`lynx runtime ready` **不参与判定**（它是里程碑，而 IFR 的主张恰好是"在它之前"画出来）；也不取**最后一个** `layout finish`（会对账的框架会再布局一次） |
+| 设备 | **低端机**：Kirin 970（2017，Android 10）—— Geekbench 6 单核 ≈ **420**；**旗舰机**：Snapdragon 8 Gen 3（2023，Android 16）—— ≈ **2200**（GB6 分数取自 NanoReview 的公开汇总，不是本文测的；具体型号列在「如果你想试」）。下方每个数字都标明来自哪台；两台跑的是同一套协议、同样的三个 bundle（字节相同、URL 绑内容哈希）与同一台主机 |
+| 样本 | 进程级点位，**交替**（一轮三臂各一次），**n=11**；中位数只用成立的轮次 |
+| 构建 | 无探针族：`def-1000`（IFR 关）、`ifr-1000`（IFR 开）、`react-1000`（ReactLynx）—— 1000 行、无 timing flag、无诊断 define |
+| 夹具 | `packages/benchmark/harness/ab-device.mjs` —— 唯一的设备驱动（启动、窗口、判定）；`sweep-rows.mjs` 只是薄编排器，自己不解析日志 |
+
+**不静默丢样本。** 驱动整轮会话只持有一条 `adb logcat` 流，每轮锚在自己的 `am_proc_start` 上（启动前先记下流的位置）。启动失败按具名类别与中位数并列报出（`launch-error`、`missing: am_proc_start | LynxShell create | lynx runtime ready`、`host-killed: <killer>`、`cap-exceeded`），死启动重发至多两次才算空缺；没有任何一轮被悄悄扔掉，也不会给出错值。
+
+**bundle 走缓存**：URL 绑在内容哈希上、按构建发 `immutable`，所以（约 113% 更大的）IFR bundle 不会每轮重下。
+
+## 为什么现在更贵
+
+- **主线程的引擎更慢，而且这不是构建方式造成的。** 主线程是 PrimJS（QuickJS 分支）跑 Lepus 字节码、无 JIT；后台是带
+  JIT 的 V8。引擎日志把这件事写得很直白（主线程 `primjs: Loading libwasm.so`、`lepusng_debugger`；后台 `v8_runtime`、
+  `V8Runtime::evaluateJavaScript`）。
+- **是同一份活被搬了地方。** 记录显示主线程建出的是后台本来也要建的那一套帧（`29048` 个数组元素、覆盖 `1001` 个
+  `INSTANTIATE` 帧），所以 IFR 并不是做更少的事 —— 而是在更慢的引擎上做同一件事。
+- **对账是首帧之后的成本，而且可以量出来。** 它在后台首批 ops 到达时触发 —— 但主线程是单线程、此刻仍在 `renderPage`
+  里，所以这批消息只能**排队**，走查在帧交给引擎**之后**才开始。老机上用 console 探针实测：对账在 `renderPage` 返回后
+  **约 20ms** 启动，耗时 **0 / 76 / 304ms**（0 / 250 / 1000 行，即 48 / 7298 / 29048 帧，线性 ≈ **0.010ms/帧**，每个点 3/3
+  一致）。因此它**任何行数下都不进入被测的首屏数值**；它推后的是"后台树接管"的时刻。
+
+IFR 确实把后台启动链的尾巴从关键路径上拿掉了（bundle 解析、应用求值、投递这一批）。只是 1000 行时，这点收益小于
+「在主线程上重做一遍渲染」的代价。
+
+## 什么时候它赢：行数扫点
+
+这个取舍有一个交叉点，而且落在一个**很小**的首屏上。同一台设备、每个行数一个窗口、每臂 11 轮交替，**一轮三臂**：
+IFR 关、IFR 开、ReactLynx —— 后者按架构本来就主线程渲染，所以它是"主线程渲染要花多少"最恰当的参照物。每一臂在每个
+行数各自一个构建（行数是编译期烧进去的；bundle 体积不随行数变化，所以没有体积混淆）。自家默认与自家 IFR 两臂
+（同一个 app、同样行数）在每一档都做过状态栏以下的逐像素比对，完全一致 —— 快的那一臂并没有少画东西；ReactLynx 是
+另一个代码库，不对它作像素主张。
+
+| 行数 | 默认 | IFR | ReactLynx | Δ ifr−def | Δ react−ifr |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 384 [364, 393] | 348 [345, 361] | 314 [308, 324] | −36 | −34 |
+| 25 | 419 [392, 428] | 385 [370, 398] | 346 [332, 354] | −34 | −39 |
+| 50 | 434 [415, 450] | 433 [405, 440] | 400 [394, 426] | −1 | −33 |
+| 75 | 458 [436, 475] | 480 [451, 481] | 447 [419, 451] | +22 | −33 |
+| 100 | 490 [484, 529] | 512 [488, 537] | 484 [468, 501] | +22 | −28 |
+| 250 | 656 [647, 671] | 734 [728, 743] | 730 [727, 746] | +78 | −4 |
+| 500 | 975 [970, 977] | 1160 [1154, 1169] | 1201 [1185, 1203] | +185 | +41 |
+| 1000 | 2262 [2161, 2310] | 3174 [3146, 3255] | 3582 [3564, 3615] | +912 | +408 |
+
+中位数（ms），方括号是 IQR，口径是 `am_proc_start` → 第一个内容帧。每个行数各自一个窗口（这里的 1000 行点就是上方
+主表）。落在 `lynx runtime ready` **之前**的帧**不做标记**：这台设备上小屏时 IFR 与 ReactLynx 两臂本来就画在后台
+runtime 起来之前 —— 那是被测的功能本身，不是例外；上面的判据对它与对别的帧一视同仁。
+
+**绝对值属于"某台设备上的某一次会话"**：同一台老机在发热状态下跑同一张表会整体慢 20–30%，所以窗口必须背靠背、只读同一
+窗口内的 Δ。涉及 ReactLynx 的两个交叉点应当报**区间而不是点** —— 它的截距只比 IFR 低约 40ms、斜率却陡约 0.16ms/行，所以小
+行数两臂几毫秒的噪声就能把这个交叉点挪动几十行。更稳的是 IFR-vs-默认那个（跨会话 56–96 行）。
+
+### 同一套扫点，换到旗舰机
+
+协议不变、只换设备、同样的三个应用（URL 绑内容哈希）、主机相同 —— 旗舰机
+（Snapdragon 8 Gen 3，Geekbench 6 单核 ≈ 2200）：
+
+| 行数 | 默认 | IFR | ReactLynx | Δ ifr−def | Δ react−ifr |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 158 [152, 162] | 156 [148, 168] | 137 [135, 142] | −2 | −19 |
+| 25 | 180 [177, 183] | 176 [167, 183] | 164 [158, 165] | −4 | −12 |
+| 50 | 189 [181, 196] | 194 [191, 204] | 191 [180, 203] | +5 | −3 |
+| 75 | 209 [197, 214] | 225 [218, 235] | 209 [203, 212] | +16 | −16 |
+| 100 | 221 [213, 223] | 252 [246, 269] | 232 [228, 233] | +31 | −20 |
+| 250 | 322 [316, 328] | 407 [386, 425] | 379 [377, 383] | +85 | −28 |
+| 500 | 587 [545, 606] | 926 [860, 984] | 834 [821, 991] | +339 | −92 |
+| 1000 | 1252 [1228, 1300] | 1922 [1908, 1984] | 1914 [1809, 2011] | +670 | −8 |
+
+两台都是全部轮次成立（每臂 11/11）。
+
+三臂在**线性区**（`N ≤ 500`，各臂的每行代价在这里稳定；500-1000 段三臂同时变陡）上的最小二乘拟合是
+`377 + 1.178·N`（默认）、`349 + 1.609·N`（IFR）、`308 + 1.769·N`（ReactLynx）毫秒。截距落在实测 0 行值上
+（384 / 348 / 314），所以它们是**固定成本**而不是外推：IFR 相对自家默认固定赢 **28ms**，代价是**每行 0.43ms**。
+ReactLynx 的**固定成本最低**（按拟合比 IFR 低 41ms、比自家默认低 69ms；实测 0 行点是 34ms 与 70ms）、**每行代价最高**
+（1.769 vs 1.609 vs 1.178 ms/行），于是低端机上三臂两两相交：
+
+| 配对 | 相交于 | 其下更快 | 其上更快 |
+| --- | ---: | --- | --- |
+| ReactLynx vs 自家默认 | ~117 行 | ReactLynx | 自家默认 |
+| ReactLynx vs IFR | ~259 行 | ReactLynx | IFR |
+| IFR vs 自家默认 | ~65 行 | IFR | 自家默认 |
+
+跨会话（同协议、同设备、各 11 轮）重复出的区间：IFR-vs-默认 **56–96 行**、ReactLynx-vs-IFR
+**180–310 行**、ReactLynx-vs-默认 **109–141 行**。上面表里的点是其中一次会话的拟合值，跨会话只该读区间 ——
+尤其 ReactLynx 那两个，在 250 行附近两臂的差只有几毫秒，正负翻转都在噪声内。
+
+旗舰机同样区间的拟合是 `146 + 0.845·N`（默认）、`116 + 1.525·N`（IFR）、`111 + 1.368·N`（ReactLynx），截距同样落在
+实测 0 行值上（158 / 156 / 137）。结构变了两处：
+
+| 配对 | 旗舰机 | 低端机 |
+| --- | ---: | ---: |
+| IFR vs 自家默认 | ~44 行 | ~65 行 |
+| ReactLynx vs IFR | **无交叉点** | ~259 行 |
+| ReactLynx vs 自家默认 | ~66 行 | ~117 行 |
+
+- **IFR 的内部胜利结束得更早**（44 行 vs 65 行）：它省下的固定量在两台上是同一量级，但在一台其他环节都更快的机器上，
+  它每行的代价占比更大。
+- **ReactLynx 在旗舰机上不再输**。它的每行代价（1.368ms）仍高于自家默认（0.845）但已**低于** IFR（1.525），固定成本又是
+  三者最低，于是旗舰上它在**每一个行数**都快于 IFR —— 1000 行时两者落在彼此 IQR 内（1914 vs 1922ms）。「ReactLynx 每行
+  代价最高」是低端机的性质，不是 ReactLynx 的性质。
+
+**在两台设备上，0–1000 行里都没有任何一个行数能让 IFR 成为三者中最快的。** 低端机 ~109–141 行以下 ReactLynx 最快、以上自家
+默认最快，IFR 唯一的胜利是**内部的**（赢自家后台路径，0 行时 36ms），并在 ~65 行结束，远早于它反超 ReactLynx 的 ~180–310 行。
+旗舰机上这个内部胜利缩到 0 行时 2ms（在噪声内）、在 ~44 行结束，而 ReactLynx 在全程都快于 IFR：0-25 行领先 12-19ms，
+1000 行打平。两个交叉点之间，IFR 同时慢于两个邻居，直接测到的区间也一致（低端机 100 行时三者是 490 / 512 / 484ms ——
+IFR 落后自家默认 22ms、落后 ReactLynx 28ms）。所以 MT-IFR 是一个真实但**内部**的优化：它缩短了
+自家路径的尾巴，还没兑现成对外可比的优势；而在更快的设备上，连这点优势在最小屏上也已经小到测不出来。
+
+ReactLynx 小屏领先的**一部分根本不是渲染**：它的 bundle 是 **95KB**，我们是 119KB（IFR 是 254KB），能上屏之前要下载
+和解析的东西本来就少。
+
+**为什么赢得这么少。** 比两臂在 `LoadTemplate` 之后各自还要走的尾巴 —— 那是它们不再做同一件事的地方（低端机）。25 行时默认臂从
+`LoadTemplate` 到内容帧要 109ms（后台启动 → V8 渲染 → 投递 → 应用 → 布局）；IFR 要 75ms（主线程 bundle 求值 →
+PrimJS 渲染 → 布局），而且在后台 runtime 起来之前就上屏了。这 34ms 就是全部的固定收益，与拟合出的 28ms 接近。
+1000 行时同样两段尾巴是 1969ms 和 2887ms。所以 IFR 是拿「常数级的 ~28ms 后台链尾巴」去换「每行 0.43ms 的慢引擎
+额外渲染」—— 几行很便宜，一张表就是灾难。旗舰机上同一个取舍写在截距（156 − 158 = −2ms）和更陡的 IFR 斜率
+（1.525 vs 0.845 ms/行）里：可省的不多，要付的更多。
+
+于是实用规则很窄：只有当首屏**很小**（几十行）**且**后台启动异常昂贵时，IFR 才值得一测 —— 而且即便在那时，它在两台设备上
+都没能赢过 ReactLynx。0-50 行时整个首屏本来就只有 314-434ms，IFR 相对自家路径拿到的 1-36ms 大致就是一次布局的代价，
+还要额外付 +113% 的体积；在列表/表格屏上只有成本、没有对应的收益。
+
+一个相关事实：**不存在受支持的「单线程 Lynx 配置」可以做对照。** `ThreadStrategyForRendering.ALL_ON_UI` 并**不会**把
+应用 JS 搬到 UI 线程 —— 在任何线程策略下 JS runtime 都有自己的 `Lynx_JS` 线程；`ALL_ON_UI` 只搬引擎和布局。真正把
+JS 收到 UI 线程上的开关只有 `enable_js = false`，而它在引擎仓库里只在一处被调用：一个单元测试。
+
+### 跨示例应用
+
+同一台低端机、每个应用 **15 次**交替、单一时间窗，**只对照我们自己的默认路径** —— 这一组没有 ReactLynx 臂：
+
+| 应用 | 默认 | IFR | Δ | IQR（默认 → IFR） | 包体（默认 → IFR） |
+|---|---:|---:|---:|---|---|
+| counter | 353 | 331 | −22 | 321–369 → 309–347 | 81.9K → 201.6K（+146%） |
+| todomvc | 372 | 362 | −10 | 358–384 → 349–377 | 98.6K → 232.9K（+136%） |
+| 7guis | 339 | 333 | −6 | 327–358 → 316–351 | 81.0K → 199.8K（+147%） |
+| style-demo | 359 | 358 | −1 | 346–374 → 340–376 | 87.9K → 211.6K（+141%） |
+| tailwind | 376 | 358 | −18 | 360–396 → 338–365 | 105.6K → 237.0K（+124%） |
+| motion | 365 | 352 | −13 | 354–391 → 341–360 | 198.7K → 324.5K（+63%） |
+| scrolling | 362 | 361 | −1 | 347–385 → 338–377 | 92.6K → 218.1K（+135%） |
+| networking | 451 | 373 | **−78** | 435–476 → 358–383 | 186.8K → 390.9K（+109%） |
+| hackernews | 481 | 521 | **+40** | 460–511 → 504–563 | 241.2K → 551.5K（+129%） |
+| elk | 570 | 645 | **+75** | 560–574 → 642–651 | 473.4K → 977.5K（+107%） |
+
+一个窗口、每臂 15 轮交替。除 elk 的 IFR 臂（13/15：两次启动在 12s 上限内没有画出内容帧）外全部成立。按驱动
+**事先固定**的判据——|Δ| < 15ms 算噪声，|Δ| ≥ 25ms 且 IQR 不重叠才算赢，其余为趋势——**networking 赢**（−78）、
+**elk 输**（+75）、**hackernews 是反方向的趋势**（+40，IQR 重叠），**counter（−22）与 tailwind（−18）是偏向 IFR
+的趋势**；其余五行落在噪声里。
+
+IFR 只买到一样东西：**主线程能在后台首批 ops 到达之前先呈现一帧** —— 指标锚在"第一帧内容"上。代价是固定的：
+MT 侧的包大 63–147%，且要在 MT 上取回并求值。这笔交易划不划算，取决于 MT 当下能画出什么，而对账分支直接给出答案
+（每个应用冷启一次，在钩子上打点）：
+
+| 应用 | MT 画了 | BG 首批 | 对账 |
+|---|---:|---:|---|
+| counter | 22 | 22 | `match`——没有要做的 |
+| todomvc | 38 | 38 | `match` |
+| networking | 33（`Loading posts…` 壳） | 48 | `diverge`（`frame-kind` @20）→ 拆树 + 重放 |
+| hackernews | **0** | 188 | `diverge`（`length`）→ 拆树 + 重放 |
+| elk | **0** | 421 | `diverge`（`length`）→ 拆树 + 重放 |
+
+`networking` 同步画出 `Loading posts…` 壳，它的第一帧内容来自 MT；随后 BG 那批 diverge（`frame-kind`：等它产出时
+fetch 已 resolve，树变成壳 + 列表）。同步且小的首屏（`counter`、`todomvc`）逐帧 `match`，差值落进噪声里。
+
+::: warning 路由类应用在 MT 上没有首屏
+
+`hackernews` 与 `elk` 在 IFR 下 MT 上画 **0 个 op**（打点实测：只创建了 page 根，`els = 2`），只增加了包体与求值成本（+40 / +75）。两条实测事实：
+
+- 它们的首屏在 TanStack Router 之后，而路由的启动挂在 `Transitioner` 的 `onSettled` →
+  `queueMicrotask(() => router.load())` 上；MT 跑的是 solid 的**服务端构建**（规则 2），`onSettled` 是空实现。
+- 它们的模块在求值期读 `window`，MT 上渲染在 `renderPage` 之前就被
+  `ReferenceError: window is not defined` 掐断（logcat 有记录）。在 MT 上伪装 `window` 能消掉这个异常，但依然
+  0 个 op，且实测更慢 —— +61 / +103（"browser" 探针把 query-core 的 `isServer` 翻成 false，
+  首屏渲染期就去 attach 观察者并发起 fetch）。
+
+:::
+
+路由应用要跑 IFR，必须放弃路由器伸手要的那个浏览器 API：TanStack Router 的查询串编解码会构造
+`URLSearchParams`，主线程没有这个类，而路由是在模块顶层创建的 ⇒ 主线程在首帧之前就死了。路由器正好暴露了
+`parseSearch` / `stringifySearch` 两个选项，用纯字符串实现覆盖掉（见 `examples/elk/src/router-search.ts`），
+就把这个依赖去掉了，而不是伪造一个全局。这个覆盖是**编译期**的：`__MAIN_THREAD__` 只在主线程副本里为真，
+所以后台副本保留 TanStack 默认的编解码，连我们的实现都不会被打进后台包体。
+
+这组只回答「IFR 比默认快还是慢」。小屏上最快的仍是 ReactLynx（见上面的交叉点），赢了默认不等于最快。包体列就是本窗口被测
+那份构建的大小，取的是下方预览里同一个入口（7guis `counter`、motion `basic`、scrolling `ScrollViewBasic`）；可迁移的是
+比值：**1.63–2.47×**（motion 最小、7guis 最大）。
+
+## 首屏代码的线程契约
+
+`enableMtIfr` 让**同一份源码在两个线程各求值一次**。能依赖什么、不能依赖什么，只有四条：
+
+1. **模块顶层不许发起 I/O，也不许读宿主面。** 后台（BG）的 `window`/`self`/`document`/`fetch` 是
+   `RuntimeWrapperWebpackPlugin` 注入的**函数参数**，主线程（MT）没有这层包装。runtime 只装**一个**全局——
+   `queueMicrotask` 兜底——**只在 BG 装**。装它是因为 **solid 自己的挂载路径**在调裸名（`onHydrationEnd` 每次渲染
+   都跑；不装则所有应用首帧就抛）。装进去的是转调 `lynx.queueMicrotask` 的包装，而它只能经**裸标识符**拿到
+   （`lynx` 是 `RuntimeWrapperWebpackPlugin` 注入的参数，BG 的 `globalThis` 上没有 `lynx`）。**MT 不需要它**——
+   MT 的 JS 上下文自带 `queueMicrotask`。另：不要把 `Promise.resolve().then` 当 microtask 原语——这个宿主的
+   `Promise` 是 JS polyfill，第二级 `.then` 会输给 `setTimeout(0)`（见 benchmark-framework 的真机自检）。
+
+   除此之外的一切都归应用自己，写在自己的 `polyfills.ts` 里
+   （见 `examples/elk/src/polyfills.ts`；motion 的门是 `examples/motion/src/adapters/shim-entry.ts`）：
+   - `self` 是 TanStack client 构建**无条件**要的：它给每个 router 实例打 `self.__TSR_ROUTER__`，而那个包里
+     `isServer` 是编译期 `false`，那行读前面没有任何特性探测。装它要小心：BG 上 `self` 是包装器参数，赋值必须落到
+     那个绑定上；MT 上根本不存在这个裸绑定，严格模式模块在求值期就会抛 `ReferenceError: self is not defined`，
+     页面还没开始画就死了。所以示例把裸赋值挡在 runtime 注入的 MT-IFR 标记后面
+     （`'__lynxSolidMountIfrRoot' in globalThis`，只有 IFR 构建才有），MT 交给下面的 `globalThis.self` 安装；
+     非 IFR 的 MT 包里根本没有应用代码。
+   - `window` **绝不在 MT 上伪造**：会把所有 `typeof window === 'undefined'` 探测翻成"浏览器"（实测：query-core
+     的 `isServer` 变 false，observer 在首屏渲染时挂上并发起 fetch，死在缺失的 `AbortController` 上）。有接缝的
+     库用接缝——router 示例给 `createRouter` 传 `origin`，`RouterCore` 就不会读 `window?.origin`。
+   - `document`/`localStorage`/`navigator`/`fetch` 同样不补（假 BOM 会把第三方库引到浏览器分支；BG 的 `fetch`
+     是 wrapper 体内 `fetch = fetch || lynx.fetch` 赋出来的）。在模块顶层读它们，MT 会在 `renderPage` 之前抛。
+2. **I/O 放 `onSettled` 或 effect 体。** MT 侧 alias 的是 solid 的一次性 server build：`onSettled` 是空实现、
+   `createEffect` 的 effect 体被丢掉 —— 这两处在 MT 上**天然不执行**，所以取数、订阅、注册监听放这里就是线程无关的。
+3. **别把 I/O 放进任何 computation。** MT 上 alias 的是 server build：`createMemo`、`createSignal(fn)`、
+   `createStore(fn)`、`createEffect(compute, effect)` 的 compute 都在**创建时**执行（读不读都跑；`createEffect` 的
+   effect 体则是丢掉的）。首屏的异步数据因此在 MT 上根本不会出现：没有 SSR context 时 `<Loading>` 只渲染一次
+   fallback，promise 落地也不重渲染。首屏用不到的异步 memo 用 `ssrSource: 'client'` 让它在 MT 上不创建；首屏会读到
+   它的，再给一个 `loadingValue` 作初值（裸 `ssrSource: 'client'` 在渲染期被读会直接抛错）。
+4. **初始状态必须线程无关。** MT 上就是"还没有数据"，渲染 loading / 空态即可。不要在源码里判断"我在哪条线程" ——
+   运行时**不提供** `isIfrMainThread()` 之类的谓词，需要分叉通常意味着代码放错了位置。
+
+第 1 条的反例是 `examples/networking`：它曾把 `globalThis.fetch ?? fetch` 写在模块顶层，IFR 下整份 MT bundle 在求值期
+就炸。现在它**只在后台线程**装 `window`（`__MAIN_THREAD__` 宏把这块从 MT 副本里折掉），于是 query-core 的 `isServer`
+在 MT 上保持 true：observer 不订阅、请求不发出；BG 那边照常取数并把内容补上屏。**修法是挪位置，不是加兼容层。**
+
+**什么该放应用、什么该放 runtime。** runtime 提供线程契约 + 唯一一个全局 `queueMicrotask`——它托管的框架离不开
+（solid 每次挂载都调裸名），只在 BG 装，MT 上下文自带；runtime 自己的调度不依赖它，`internal/microtask.ts` 直调
+`lynx.queueMicrotask`。**其余宿主面补丁一律归应用**：`self`、`window` 以及 API 层面的缺口（`URLSearchParams`——TanStack
+在模块顶层构造、`URL`、`Headers`、`AbortSignal`）都在 `examples/*/src/polyfills.ts`（或库自己的门，如 motion 的
+`shim-entry.ts`）。每个都有真实体积，不是每个 IFR 应用都要付；坑在于漏一个只在真机炸（web 有原生实现）。
+**worklet 代码也算应用代码**：某个 worklet 在**非 IFR** 的 MT 上裸读 `queueMicrotask`/`self` 会炸，这是有意为之——
+runtime 不为它装任何东西。
+
+## 如果你想试
+
+配置：
+
+```ts title="rsbuild.config.ts"
+pluginSolidLynx({ enableMtIfr: true })
+```
+
+本仓库的示例把这个开关接到 `LYNX_MT_IFR` 上，所以同一份配置能产出两份：`LYNX_MT_IFR=1 nub run -F
+@lynx-solid/dev-<example> build` 写 `dist-ifr/`，不带环境变量就是出厂的 `dist/`。下面嵌入的示例就是这么构建的
+——多一次构建，不是把示例复制一份。
+
+::: warning 不要自己 alias runtime
+
+IFR 要求整张图只有**一份** `@lynx-solid/runtime` 实例（编译器发出的 `@lynx-solid/runtime/lynx-template` 子路径也算）。给这两个说明符加自己的 alias、或从 `dist/` 深 import，会让 runtime 被实例化两遍 —— 主线程的渲染写进没人读的那一份，**屏幕白着、不报任何错**，首屏悄悄退回后台重放。插件已从同一个 `ifr-runtime` 推导这两条别名，不要手写同名 alias 覆盖它。
+
+:::
+
+想确认它到底做了什么，用官方工具读主线程的 console（`npx --yes agent-lynx get-console --thread main`，要经 dev server：
+release 包里 MT 的 `console` **不进 logcat**，所以在那里看不到这行什么都不能证明）。`match` 是不打印的，要看的是兜底那行：
+
+```
+MT-IFR: the background first batch does not match the main-thread first screen (…); repainting from the background
+```
+
+读它时要和上面的分支表一起读。**异步**首屏出现这行是正常的——MT 本来就没画东西，BG 那批不可能匹配；
+**同步**首屏出现它才是回退信号：counter 与 todomvc 是逐帧 `match` 的，哪天它们不 match 了，要么 runtime 被实例化了两次
+（见上面的警告），要么应用首屏多了一个异步依赖。
+
+复现这个对比（行数是编译期烧进去的，所以每一臂各自一个构建；两个 bundle 从同一个目录服务）：
+
+```bash
+# A：不加 enableMtIfr
+printf 'export const INITIAL_ROWS = 1000\n' > examples/bench-table/src/rows-config.ts
+nub run -F @lynx-solid/dev-bench-table build
+cp examples/bench-table/dist/main.lynx.bundle examples/bench-table/dist/ifr-off.lynx.bundle
+
+# B：在 examples/bench-table/rsbuild.config.ts 加上 enableMtIfr: true，重新构建，然后
+node packages/benchmark/harness/ab-device.mjs \
+  --serial <device>:<port> --label ifr-1k \
+  --a-url http://<host>:8403/ifr-off.lynx.bundle --a-bundle examples/bench-table/dist/ifr-off.lynx.bundle \
+  --b-url http://<host>:8403/main.lynx.bundle    --b-bundle examples/bench-table/dist/main.lynx.bundle \
+  --reps 7
+```
+
+`ab-device.mjs` 每轮交替跑两侧，所以热漂移不会落进对比里；它还把每个 bundle 的内容哈希写进 URL，重建过的 bundle
+绝不会被缓存糊弄。**屏幕常亮由 driver 负责**：运行期间由 `ab-device` 保持屏幕常亮，屏幕关着时直接拒绝测量。屏幕一暗，引擎只布局长列表的一部分——同一个 1000 行 bundle 会从 2.2s 掉到 ~0.6s——而每个数字都会照常「成立」。
+
+行数扫点就是同一个循环，把 `INITIAL_ROWS` 设成各个行数、每个行数一个窗口（`--label sweep-<行数>`）；行数不改变 bundle
+体积，所以各臂始终可比。想确认两臂画的是同一屏，用 `adb exec-out screencap`（原始格式，不要加 `-p`）分别抓两次再比对
+状态栏以下的像素 —— `screencap -p` 因为状态栏时钟在变，无法按字节比较。
+
+本次两台机器：一台 Kirin 970 设备（2017，Android 10）与一台 Snapdragon 8 Gen 3 设备（2023，Android 16）；
+下面这条命令只需换 `--serial` 就能在任一台上重跑，它把每个点的各臂都构建出来、各自在自己的窗口里测，并做拟合：
+
+```bash
+node packages/benchmark/harness/sweep-rows.mjs \
+  --serial <device>:<port> --url http://<host>:8403 --react \
+  --rows 0,25,50,75,100,250,500,1000 --reps 11
+```
+
+`--react` 加上 ReactLynx 那一臂（第二个示例应用）；不加就只比自家两条路径。拟合只取 `N ≤ 500`（`--fit-max`），因为
+500-1000 段在三臂上都非线性 —— 把它算进去会让 IFR-vs-ReactLynx 的交叉点移动约 40 行、并把截距压到实测 0 行值以下，
+所以脚本会把实测的 0 行数字与拟合值并排印出。
+
+**一次测量花在哪。** 驱动自己测量宿主侧各阶段，而它们全是"应用本身"或"进程拆卸"——**没有一条刻意的等待**：
+
+| 阶段 | 是什么 | ms/轮 |
+| --- | --- | ---: |
+| teardown | `am force-stop` + 等 pid 消失 | ~320 |
+| launch | `am start -W`：应用真的起来（不是等待，是被启动的对象） | ~440 |
+| pid poll | 启动返回后等 `pidof` 应答 | ~100 |
+| frame | 等这一轮自己的内容行到达 | 0 行时 ~4ms，1000 行时 ~3.8s |
+| **每轮合计** | | **0 行 0.86s，1000 行 4.8s** |
+
+日志来自**整轮会话共用的一条 `adb logcat` 流**，所以一轮除了"等自己的那几行"之外不再付任何传输成本。对照做法是每次
+轮询都 `logcat -d` 拉一次——**固定 ~185ms/次，与拉多少行几乎无关**（`-t 300` 188ms、`-t 3000` 347ms），而一轮要拉 1–5 次。
+那种传输还会**改变测量本身**：按 250ms 间隔在启动期间反复拉，会让三个臂在 1000 行时一起慢 **48–115ms**，因为读日志在
+**拖慢正在启动的设备**。流式只搬真实新增的行，而判定用的始终是设备时间戳，所以数字不取决于"什么时候读到"。
+
+读表时值得知道的两条夹具事实：**设备空闲数分钟后的第一次启动更冷**（`LynxShell create` 343ms vs 195ms、默认臂首屏
+562ms vs 354ms，而主线程两臂几乎不动）——所以窗口背靠背跑，而"暂停后起的 3 轮小窗"默认臂会偏慢；**设备越热整体越慢**，
+所以只读**同一窗口内**的 Δ。
+
+驱动上的 `--phases` 会打印每一轮的里程碑时间线（`shell`、`LoadTemplate`、`runtime ready`、内容帧，以及机制一节引用的
+`LoadTemplate → content` 尾巴）：它与判定用的是同一份数据，所以相位不可能与它所解释的数字不符。
+
+体积代价：**+113%**（未压缩 119KB → 254KB；ReactLynx 同等工作量的 bundle 是 95KB）。
+
+## 跑起来的示例
+
+下面每个嵌入都是 **IFR 构建**——同一份源码加 `LYNX_MT_IFR=1` 构建出来的产物，也就是上面那些数字测的那份。每个嵌入的
+入口选择器里有两份：`dist/<entry>.lynx.bundle` 是出厂默认构建、`dist/<entry>.ifr.lynx.bundle` 是 IFR 构建，本页默认
+选中后者。它们来自同一个 `rsbuild.config.ts` 的两次构建（这个开关同时决定输出目录），不是把示例复制一份。Web 标签两条
+入口是同一个 bundle：web 宿主没有主线程，画不了首屏。
+
+<Go example="counter" defaultFile="src/index.tsx" defaultEntryFile="dist/counter.ifr.lynx.bundle" />
+
+<Go example="todomvc" defaultFile="src/index.tsx" defaultEntryFile="dist/todomvc.ifr.lynx.bundle" />
+
+<Go example="7guis" entry="src/counter" defaultFile="src/counter/index.tsx" defaultEntryName="counter" defaultEntryFile="dist/counter.ifr.lynx.bundle" />
+
+<Go example="style-demo" defaultFile="src/index.tsx" defaultEntryFile="dist/style.ifr.lynx.bundle" />
+
+<Go example="tailwind" defaultFile="src/index.tsx" defaultEntryFile="dist/tailwind.ifr.lynx.bundle" />
+
+<Go example="motion" entry="src/Basic" defaultFile="src/Basic/index.tsx" defaultEntryName="basic" defaultEntryFile="dist/basic.ifr.lynx.bundle" />
+
+<Go example="scrolling" entry="src/ScrollViewBasic" defaultFile="src/ScrollViewBasic/index.tsx" defaultEntryName="ScrollViewBasic" defaultEntryFile="dist/ScrollViewBasic.ifr.lynx.bundle" />
+
+<Go example="networking" defaultFile="src/index.tsx" defaultEntryFile="dist/networking.ifr.lynx.bundle" />
+
+<Go example="hackernews" defaultFile="src/index.tsx" defaultEntryFile="dist/hackernews.ifr.lynx.bundle" />
+
+<Go
+  example="elk"
+  defaultFile="src/App.tsx"
+  defaultEntryFile="dist/elk.ifr.lynx.bundle"
+  schema="{{{url}}}?fullscreen=true&bar_color=fafafa&bg_color=fafafa"
+/>
+
+## 相关
+
+- [基准测试](/zh/guide/benchmark-framework) —— 本页遵循的仪器口径。
+- `tests/behavior/ifr-hydrate.test.ts` —— 对账的三态分类与重绘路径（Part D）。
+- `tests/compiler/ifr-runtime-alias.test.ts` —— 主线程层的「单一构建树」不变式。

@@ -1,0 +1,33 @@
+# Sources & Attribution
+
+Lynx Solid did not appear out of nowhere. Several of its ideas, demos and one of its packages are ports or adaptations of earlier open-source work, and the people who wrote that work deserve to be named. This page lists where things came from.
+
+## Upstream projects
+
+| Project | License | What we took |
+|---|---|---|
+| [vue-lynx](https://github.com/Huxpro/vue-lynx) | Apache-2.0 | The reference for a dual-thread Lynx renderer built on a non-React framework. The Touch FX worklet engine is ported from it almost verbatim (see [Playground: Touch FX](/guide/touch-fx)); its vapor branch's `ui-vdom`/`ui-react` pair is what the benchmark workload is isomorphic to. |
+| [ReactLynx](https://github.com/lynx-family/lynx-stack) (lynx-stack) | Apache-2.0 | Conventions we follow rather than code we ship: the `background-only` marker package used to poison background-only modules, the shared-layer runtime model behind Main Thread Script, and the calibration baseline in [Benchmark](/guide/benchmark-framework). |
+| [lynx-examples](https://github.com/lynx-family/lynx-examples) | Apache-2.0 | Example structure. The [Motion](/guide/motion) demo's directory and entry names match its `examples/motion`, and the demo's theme chrome is a port of its shared frame (without `useGlobalProps`). |
+| [dom-expressions](https://github.com/ryansolid/dom-expressions) | MIT, Copyright Ryan Carniato | The JSX compiler. See [The compiler fork](#the-compiler-fork) below. |
+| [motion](https://motion.dev/) | MIT | The animation engine. `motion-dom` is used as a normal dependency, and a React-free slice of [`@lynx-js/motion`](https://github.com/lynx-family/lynx-stack) (Apache-2.0) is vendored as the Lynx element adapter in the Motion demo. |
+| [solid-js](https://github.com/solidjs/solid) | MIT | The reactivity core and component system. Used as-is — same package, same API as on the web; Lynx Solid only adds the renderer. |
+| [Elk](https://github.com/elk-zone/elk) (MIT), reached via [vue-lynx's Elk example](https://github.com/Huxpro/vue-lynx/tree/main/examples/elk) (Apache-2.0) | MIT / Apache-2.0 | The [Elk](/guide/elk) showcase is ported from vue-lynx's Elk example, which is itself a port of the Elk Mastodon client by Anthony Fu and the elk-zone team — screen structure, domain logic and the masto.js pagination pattern. |
+
+## The compiler fork
+
+`packages/compiler/babel-plugin-jsx-lynx` is a **hard fork** of `babel-plugin-jsx` from [dom-expressions](https://github.com/ryansolid/dom-expressions) (MIT, Copyright Ryan Carniato). It does not track upstream — changes land directly on the sources.
+
+What the fork adds is Lynx-specific: static subtrees are extracted into main-thread skeleton templates emitted as `createCode` ops, and `'main thread'` worklet functions are captured and given stable ids. The base version, upstream commits that have been cherry-picked, and a file-by-file origin map are recorded in `packages/compiler/babel-plugin-jsx-lynx/UPSTREAM.md` in this repository.
+
+The MIT notice and the original copyright are kept with the forked sources.
+
+## License notice
+
+- Lynx Solid itself is released under the MIT license (see `LICENSE` in the repository root).
+- Ported and vendored code keeps its own license and its original authors' copyright notices. Nothing in this repository relicenses anyone else's work.
+- For the Apache-2.0 material (vue-lynx, lynx-stack / ReactLynx, lynx-examples) that means the license and notice requirements of Apache-2.0 continue to apply to those parts.
+
+## Demo and benchmark lineages
+
+The showcase pages name their own sources where there is one — [TodoMVC](/guide/todomvc) (the canonical framework benchmark), [7 GUIs](/guide/7guis) (from the Solid examples family), [Elk](/guide/elk) and [Motion](/guide/motion). Those pages are the place to look when you want the per-file detail; this page is the summary.

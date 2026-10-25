@@ -1,0 +1,21 @@
+{
+  "name": "@lynx-solid/dev-bench-table-react",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "rsbuild build",
+    "typecheck": "tsc --noEmit -p ./tsconfig.json"
+  },
+  "dependencies": {
+    "@lynx-js/react": "catalog:"
+  },
+  "devDependencies": {
+    "@lynx-js/react-rsbuild-plugin": "^0.20.3",
+    "@lynx-js/rsbuild-plugin": "catalog:",
+    "@lynx-js/types": "catalog:",
+    "@rsbuild/core": "catalog:",
+    "@types/react": "^18.3.0",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "meta": {
+    "date": "2026-10-10T15:59:53.476Z",
+    "serial": "192.168.3.119:40663",
+    "model": "24117RK2CC",
+    "sdk": "36",
+    "label": "2026-10-10T15-59-42",
+    "bundleUrl": "http://192.168.3.91:4200/selftest.lynx.bundle",
+    "tapCapable": true,
+    "tapWaitMs": 15000,
+    "openToContentMs": 415,
+    "openToFinalMs": 3617,
+    "renderedMs": 51,
+    "host": "12× AMD Ryzen 5 3600 6-Core Processor              "
+  },
+  "cases": [
+    {
+      "name": "bg-bare-settimeout",
+      "pass": true,
+      "detail": "fired; globalThis.setTimeout=undefined",
+      "ms": 10
+    },
+    {
+      "name": "bg-timer-args-observe",
+      "pass": true,
+      "detail": "fired; args(2)=[\"null\",\"0\"]",
+      "ms": 11
+    },
+    {
+      "name": "mt-queue-microtask-guard",
+      "pass": true,
+      "detail": "bare before=function, after guard install=function",
+      "ms": 0
+    },
+    {
+      "name": "template-static-render",
+      "pass": true,
+      "detail": "mounted in 51.0ms",
+      "ms": 1
+    },
+    {
+      "name": "unmount-oncleanup",
+      "pass": true,
+      "detail": "fired",
+      "ms": 0
+    },
+    {
+      "name": "sign-event-bindtap",
+      "pass": true,
+      "detail": "tap received, counter=1",
+      "ms": 1212
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "extends": "../config/tsconfig/base.json",
+  "compilerOptions": {
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "types": [
+      "node",
+      "@lynx-js/types",
+      "@lynx-js/type-element-api",
+      "vitest/globals"
+    ],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true
+  },
+  "include": [
+    "**/*.ts",
+    "../packages/runtime/src/internal/globals.d.ts",
+    "../packages/runtime/src/internal/papi.d.ts",
+    "../packages/runtime/src/internal/dev.d.ts"
+  ]
+}

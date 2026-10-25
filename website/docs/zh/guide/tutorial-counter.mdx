@@ -1,0 +1,171 @@
+# 教程：计数器
+
+我们一起用 Solid 2 和 Lynx 做一个可交互的计数器。本教程不假设你会 Lynx。你在这里学到的手法是做任何 Lynx 页面和应用的基本功。
+
+:::note
+
+本教程适合喜欢动手、想快速做出点东西的人。喜欢一个概念一个概念学的，从[什么是 Lynx Solid？](/zh/guide/introduction)开始。
+
+:::
+
+## 做什么？
+
+一个计数器：一个数字，一个按钮，点按钮数字加一，完整走一遍后台 → ops → 主线程链路。
+
+<Go example="counter" defaultFile="src/index.tsx" />
+
+## 教程准备
+
+按[快速开始](/zh/guide/quick-start)搭建项目。出于静态检查与编辑器智能提示的考虑，建议启用 TypeScript。
+
+`rsbuild.config.ts` 长这样就行：
+
+```ts title="rsbuild.config.ts"
+import { defineConfig } from '@rsbuild/core'
+import { pluginSolidLynx } from '@lynx-solid/plugin'
+
+export default defineConfig({
+  source: {
+    entry: {
+      main: './src/index.tsx',
+    },
+  },
+  plugins: [pluginSolidLynx()],
+})
+```
+
+下面全部只改 `src/index.tsx`。
+
+## 第一个组件：静态 UI
+
+每个 Lynx 页面都由原生元素拼出来。`view` 是容器，`text` 是唯一能装字符的元素：
+
+```tsx title="src/index.tsx"
+import { render } from '@lynx-solid/runtime'
+
+function Counter() {
+  return (
+    <view style="display:linear;linear-direction:column;align-items:center;padding:48px">
+      <text style="font-size:28px">count: 0</text>
+    </view>
+  )
+}
+
+render(() => <Counter />)
+```
+
+`render` 把树挂到 Lynx 页面根下。像这样的静态子树会编译成骨架，主线程一次实例化——运行时没有逐节点 ops。
+
+:::info Lynx Solid 入口
+Web 端 `render()` 往 DOM 节点里挂，Lynx Solid 是 `render(() => <Counter />)`。区别是没有 DOM 节点可挂——它自动挂到 Lynx 页面根，返回的 disposer 负责整体卸载。
+:::
+
+## 加状态：signal
+
+从 `solid-js` import `createSignal`，在文本里读它。编译器把 `{count()}` 变成绑在这个文本节点上的动态开孔：
+
+```tsx title="src/index.tsx"
+import { createSignal } from 'solid-js'
+import { render } from '@lynx-solid/runtime'
+
+function Counter() {
+  const [count, setCount] = createSignal(0)
+
+  return (
+    <view style="display:linear;linear-direction:column;align-items:center;padding:48px">
+      <text style="font-size:28px">
+        count:
+        {count()}
+      </text>
+    </view>
+  )
+}
+
+render(() => <Counter />)
+```
+
+`createSignal(0)` 建响应式变量。`count()` 一变，Solid 响应式只重跑跟踪这段文本的 effect——只发一条文本更新 op，周围布局是静态的，永远不重发。
+
+## 加交互：处理点击
+
+Lynx 事件用 Lynx 的名字。`bindtap` 注册冒泡的点击处理器，跑在后台线程里改 signal，再以 op 流回主线程：
+
+```tsx title="src/index.tsx"
+function Counter() {
+  const [count, setCount] = createSignal(0)
+
+  return (
+    <view style="display:linear;linear-direction:column;align-items:center;padding:48px">
+      <text style="font-size:28px">
+        count:
+        {count()}
+      </text>
+      <view
+        bindtap={() => setCount(c => c + 1)}
+        style="margin-top:24px;padding:12px 32px;background-color:#2c4f7c;border-radius:8px"
+      >
+        <text style="color:#ffffff;font-size:20px">increment</text>
+      </view>
+    </view>
+  )
+}
+```
+
+:::details 什么是 "bindtap"？
+Lynx 有自己的事件系统，每个事件注册都带类型：`bind` 冒泡到祖先，`catch` 截断传播。`bindtap` 就是冒泡的点击，相当于点击事件。刻意没有 DOM 风格的 `on*` 别名。更多见[事件处理](https://lynxjs.org/next/guide/interaction/event-handling)页。
+:::
+
+完整应用就这些。跑 dev server，打开 Web Preview 地址点 increment——数字涨上去了，整条链路：
+
+1. 点击在**主线程**触发，送到**后台**事件注册表。
+2. 你的 `bindtap` 处理器执行，调 `setCount`——纯 Solid 响应式。
+3. 跟踪 `{count()}` 的 effect 重跑，往 batch 里推一条文本更新 op。
+4. batch 刷出去，主线程把它应用到活的文本节点上。
+
+有些交互嫌这一圈太慢（拖拽、跟手动画），同样的处理器形状可以原样搬到主线程——见[主线程脚本](/zh/guide/main-thread-script)。
+
+## 收尾
+
+恭喜！你做出了第一个可交互页面！这篇教程覆盖了在 Lynx 上用 Solid 2 写交互 UI 的基本功：原生元素、signal、后台事件。
+
+## ReactLynx vs Lynx Solid 速查
+
+| 概念 | ReactLynx | Lynx Solid |
+| ---- | --------- | ---------- |
+| 建应用 | `root.render(<App />)` | `render(() => <App />)` |
+| 状态 | `const [x, setX] = useState(val)` | `const [x, setX] = createSignal(val)` |
+| 改状态 | `setX(newVal)` | `setX(newVal)` / `setX(prev => ...)` |
+| 派生 | `useMemo(() => ...)` | `createMemo(() => ...)` |
+| 生命周期 | `useEffect(() => ..., [])` | `onSettled(() => ...)` |
+| 条件 | `{cond && <el />}` | `<Show when={cond}>` |
+| 列表 | `{arr.map(x => <el key={x} />)}` | `<For each={arr()}>{x => <el />}</For>` |
+| 点击事件 | `bindtap={handler}` | `bindtap={handler}` |
+| 滚动事件 | `bindscroll={handler}` | `bindscroll={handler}` |
+| 原生列表 | `<list>` + `item-key` | `<list>` + `item-key` |
+| 主线程脚本事件 | `main-thread:bindscroll={fn}` | `main-thread:bindscroll={fn}` |
+| 主线程脚本 ref | `useMainThreadRef(null)` | `useMainThreadRef(null)` |
+| `'main thread'` 指令 | `'main thread'` | `'main thread'` |
+
+## 跑例子
+
+```bash
+# 装依赖
+nub install
+
+# 构建运行时
+nub run build
+
+# 起 dev server
+cd examples/counter && nub run dev
+```
+
+然后打开 counter bundle 的 Web Preview 地址：
+
+| 入口 | Bundle | 内容 |
+| ---- | ------ | ---- |
+| `counter` | `counter.lynx.bundle` / `counter.web.bundle` | 点按递增的计数器 |
+
+## 下一步
+
+- [玩一玩：触摸特效](/zh/guide/touch-fx)——全跑在主线程的触摸弹簧物理与粒子池
+- [Solid 兼容性](/zh/guide/solid-compatibility)——事件、元素，以及和 Web Solid 的差异

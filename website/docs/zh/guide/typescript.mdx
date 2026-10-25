@@ -1,0 +1,106 @@
+# TypeScript
+
+Lynx Solid 开箱即用 TypeScript。响应式就是标准 Solid 2 运行时（`solid-js`），Solid 的 TypeScript 能力均按文档工作——signal、store、控制流与组件 props 均可正常进行类型检查。
+
+本页介绍 Lynx Solid 特有的部分：Lynx 内建元素的类型声明、事件类型与 `main-thread:ref` 的类型。
+
+:::tip 前置条件：Rsbuild TypeScript 配置
+在配置 Lynx Solid 类型之前，请确保项目已具备基础 TypeScript 配置——`devDependencies` 中的 `typescript`、`jsx: preserve`（JSX 保留给插件编译器消费）以及 `jsxImportSource`。详见 [TypeScript 配置指南](https://lynxjs.org/rspeedy/typescript.html)。
+:::
+
+## Lynx 元素类型
+
+TS 5.9 默认从*全局* `JSX` 命名空间解析 JSX。`@lynx-solid/runtime` 将 Lynx 内建元素扩展至该命名空间，因此 `<view>` 与 `<text>` 将解析为 Lynx 类型而非 HTML。元素 props 直接取自 `@lynx-js/types`，prop 的权威参考即 [Lynx 元素文档](https://lynxjs.org/guide/ui/elements-components.html)。
+
+在源码级 `tsconfig.json` 中添加如下配置：
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "@lynx-solid/runtime",
+    "lib": ["ES2022", "DOM"],
+    "types": ["vite/client"],
+    "noEmit": true
+  },
+  "include": ["src"]
+}
+```
+
+**各选项的作用：**
+
+- `"jsx": "preserve"`——`tsc` 不处理 JSX，由 fork 的 [dom-expressions](https://github.com/ryansolid/dom-expressions) 编译器消费。
+- `"jsxImportSource": "@lynx-solid/runtime"`——选择 Lynx 的 `JSX.IntrinsicElements`（Solid 2 与 TS 5.9 从*全局* `JSX` 命名空间解析 JSX 类型，运行时扩展的正是该命名空间），而非 HTML。
+- `"types": ["vite/client"]`——设备与 Web 目标永远不是 node 环境：排除 `@types/node` 可保留 DOM 定时器签名（`setTimeout → number`），与真机行为一致。
+
+配置完成后，你的 IDE 将为全部 Lynx 元素提供 prop 补全、事件补全与类型报错。
+
+### 示例
+
+以下是一个使用类型化 props 和 Lynx 元素的典型组件：
+
+```tsx title="src/Row.tsx"
+import type { ScrollEvent, ViewProps } from '@lynx-js/types'
+
+function Row(props: ViewProps & { size: number }) {
+  const onScroll = (e: ScrollEvent) => {
+    console.log(e.detail.scrollTop)
+  }
+  return (
+    <scroll-view bindscroll={onScroll} scroll-y …>
+      <view {...props} />
+    </scroll-view>
+  )
+}
+```
+
+在此示例中，`<scroll-view>` 与 `<view>` 均具备完整智能提示——`scroll-y` 已类型化，`bindscroll` 被识别为合法事件，拼写错误的 props 将产生类型错误。
+
+Lynx 优先模型带来的推论：
+
+- **不存在 `on*` 别名**——`onClick` 无法通过类型检查，运行时也不会转换。请使用 `bindtap` / `catchtap` / `bindscroll` / `bindinput`。
+- **`children` 为宽松类型**（`unknown`），并附带 `ref` 回调入口，与 Solid 自身的 `ElementChildrenAttribute` 同构。
+- **`input` / `textarea` 接受 `value`**——原生运行时将其视为初始内容，而官方类型包仅声明了 `default-value`，因此运行时为两者均作了增补。另有 `InputEvent` 别名供 `bindinput` 处理器使用。
+
+## 事件类型
+
+Lynx 使用 `bind*` 约定命名事件（例如 `bindtap`、`bindtouchstart`）。刻意不向 DOM 风格的 `on*` 名称映射——Lynx 事件并非 DOM 事件：
+
+| Lynx | Lynx Solid 中的写法 |
+|------|-------------------|
+| `bindtap` | `bindtap={fn}` |
+| `bindtouchstart` | `bindtouchstart={fn}` |
+| `bindlayoutchange` | `bindlayoutchange={fn}` |
+| `main-thread:bindtap` | `main-thread:bindtap={fn}`（worklet，必须携带 `'main thread'`） |
+
+事件处理器类型自 `@lynx-js/types` 原样保留，因此回调参数可获得完整类型检查。
+
+## 主线程类型
+
+`main-thread:ref` 经由 `StandardProps` 增补挂载至每个 Lynx 元素，其类型为 ref 类（而非 DOM 的 `Ref`）：
+
+```tsx
+import { useMainThreadRef } from '@lynx-solid/runtime'
+
+const boxRef = useMainThreadRef<{
+  setStyleProperty: (name: string, value: string) => void
+} | null>(null)
+
+<view main-thread:ref={boxRef} … />
+```
+
+worklet 事件的类型与后台处理器同源：`main-thread:bindscroll` 系列派生自 `ScrollViewProps` 中对应的 `bind*` 项；触摸与布局处理器（`main-thread:bindtouchstart`、`main-thread:bindlayoutchange`……）接收普通事件对象。遗漏 `'main thread'` 指令的 worklet 处理器依然可以通过类型检查（该指令属于运行时与编译器契约），因此[捕获规则](/zh/guide/main-thread-script)由构建期强制，而非类型系统。
+
+## 类型检查
+
+命令行类型检查请使用 `tsc --noEmit`：
+
+```bash
+npx tsc --noEmit -p ./tsconfig.json
+```
+
+该命令将依据类型声明校验 Lynx 元素用法、props 与事件。`globalThis` 上的自定义全局应使用 `@lynx-solid/runtime` 内部的类型化声明——禁止 `globalThis as Record<string, unknown>` 强制转换。引擎注入的 PAPI（`__CreateElement` 等）与应用层全局（`lynx`、定时器、`BroadcastChannel`）分别声明。
+
+## 宿主边界的类型
+
+设备与 Web 目标永远不是 node 环境：排除 `@types/node` 可保留 DOM 定时器签名（`setTimeout → number`），与真机行为一致。运行时包自身的 tsconfig 额外添加 `types: ["@lynx-js/types", "@lynx-js/type-element-api"]` 以覆盖引擎接口（`lynx`、`SystemInfo`、rAF）；定时器、console、`queueMicrotask`、`BroadcastChannel` 等全局的**类型声明**位于运行时的 `env.d.ts`（仅为声明——runtime 只装 `queueMicrotask` 那一个兜底），其形状引自官方接口定义，而非手工复刻。

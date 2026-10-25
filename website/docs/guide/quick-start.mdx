@@ -1,0 +1,178 @@
+import { PackageManagerTabs, Steps } from '@theme'
+
+# Quick Start
+
+Welcome to Lynx Solid! Let's create a Solid Lynx project and start developing.
+
+## System Requirements
+
+- [Node.js 18](https://nodejs.org/en) or later.
+  - Requires Node.js 18.19 when using TypeScript as configuration.
+
+## Start Developing
+
+The quickest way to get started with Lynx Solid is to set up only the frontend project and preview with **Lynx Explorer** (for native) or **Lynx for Web** (for browser).
+
+<Steps>
+
+### Create a new Lynx Solid project
+
+Every Lynx Solid app starts from three files — `package.json`, `rsbuild.config.ts`, and `src/index.tsx`:
+
+```json title="package.json"
+{
+  "name": "my-lynx-solid-app",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "rsbuild build"
+  },
+  "dependencies": {
+    "@lynx-solid/runtime": "workspace:*",
+    "solid-js": "2.0.0-rc.6"
+  },
+  "devDependencies": {
+    "@lynx-js/rsbuild-plugin": "0.1.4",
+    "@rsbuild/core": "2.2.9",
+    "@lynx-js/types": "4.1.0",
+    "@lynx-solid/plugin": "workspace:*",
+    "typescript": "^5.5.0"
+  }
+}
+```
+
+```ts title="rsbuild.config.ts"
+import { defineConfig } from '@rsbuild/core'
+import { pluginSolidLynx } from '@lynx-solid/plugin'
+
+export default defineConfig({
+  environments: {
+    lynx: {},
+    web: {},
+  },
+  source: {
+    entry: {
+      main: './src/index.tsx',
+    },
+  },
+  plugins: [pluginSolidLynx()],
+})
+```
+
+```tsx title="src/index.tsx"
+import { createSignal } from 'solid-js'
+import { render } from '@lynx-solid/runtime'
+
+function Counter() {
+  const [count, setCount] = createSignal(0)
+
+  return (
+    <view style="display:linear;linear-direction:column;align-items:center;padding:48px">
+      <text style="font-size:28px">
+        count:
+        {count()}
+      </text>
+      <view
+        bindtap={() => setCount(c => c + 1)}
+        style="margin-top:24px;padding:12px 32px;background-color:#2c4f7c;border-radius:8px"
+      >
+        <text style="color:#ffffff;font-size:20px">increment</text>
+      </view>
+    </view>
+  )
+}
+
+render(() => <Counter />)
+```
+
+TypeScript needs the Solid JSX mapping for Lynx intrinsics (`jsxImportSource`, `jsx: preserve` so the plugin's compiler consumes the JSX — see [TypeScript](/guide/typescript)).
+
+### Run the dev server
+
+1. Install dependencies:
+
+<PackageManagerTabs command="install" />
+
+2. Start the development server:
+
+<PackageManagerTabs command="run dev" />
+
+You should see output like this:
+
+```
+Rsbuild v2.2.9
+
+  ➜  Lynx       http://localhost:3000/main.lynx.bundle
+  ➜  Web        http://localhost:3000/main.web.bundle
+  ➜  ∟ Preview  http://localhost:3000/__web_preview?casename=main.web.bundle
+```
+
+The dev server produces three URLs:
+
+- **Web Preview** — Open this in your browser for a quick preview of your app.
+- **Lynx** — The bundle URL for native rendering via Lynx Explorer (see next step).
+- **Web** — The raw web bundle (useful for integration into web containers).
+
+### Preview on the Web
+
+Open the **Web Preview** URL in your browser. You'll see a live preview of your app rendered on the Web, updating automatically as you edit code.
+
+This is the exact counter above, running live:
+
+<Go example="counter" defaultFile="src/index.tsx" />
+
+### Preview on a native device
+
+To see your app rendered natively, use **Lynx Explorer**. Switch the preview above to the **QR code** tab and scan it, or copy the **Lynx** bundle URL from the terminal into "Enter Card URL" in Lynx Explorer.
+
+#### iOS Simulator
+
+1. **Install Xcode** from the [Mac App Store](https://apps.apple.com/us/app/xcode/id497799835).
+2. **Download LynxExplorer** from the [lynx-family/lynx releases](https://github.com/lynx-family/lynx/releases) (Apple Silicon `LynxExplorer-arm64.app.tar.gz`, Intel `LynxExplorer-x86_64.app.tar.gz`), then extract it.
+3. **Install on Simulator** — Open Xcode, choose **Open Developer Tool** > **Simulator**, then drag the `.app` folder into it.
+
+#### Android
+
+Download the pre-built APK from [GitHub Releases](https://github.com/lynx-family/lynx/releases/latest/download/LynxExplorer-noasan-release.apk) and install on your device.
+
+:::info Community downloads
+
+Lynx Explorer is also available on the [App Store](https://apps.apple.com/us/app/lynx-go-dev-explorer/id6743227790) and [Play Store](https://play.google.com/store/apps/details?id=com.funcs.io.lynx.go), published by community contributors. These versions are not maintained by the Lynx team.
+
+:::
+
+:::details Build from source
+
+If the pre-built binaries don't work for your environment, you can build Lynx Explorer from source:
+
+- [Build for iOS](https://github.com/lynx-family/lynx/tree/develop/explorer/darwin/ios)
+- [Build for Android](https://github.com/lynx-family/lynx/tree/develop/explorer/android)
+
+:::
+
+### Debugging
+
+Download the [Lynx DevTool](https://github.com/lynx-family/lynx-devtool/releases) desktop application. Connect your device via USB and start debugging. See the [Lynx debugging guide](https://lynxjs.org/guide/devtool/panels) to learn more.
+
+</Steps>
+
+## Going to Production
+
+The Lynx Solid project you created is a **frontend** project — it produces JavaScript bundles that a Lynx-enabled native app loads and renders. Lynx Explorer is a pre-built native app for development, but for production you'll need your own native app.
+
+### Start with Sparkling (Experimental)
+
+[Sparkling](https://tiktok.github.io/sparkling) is TikTok's open-source infrastructure for building apps with Lynx. It provides CLI tools to scaffold a native app project with scheme-driven navigation in minutes. Currently **experimental** and supports **iOS and Android** only.
+
+### Integrate into an existing app
+
+For the most flexibility, you can integrate Lynx directly into your existing app. This approach supports **iOS, Android, Harmony, Desktop, and Web**, giving you full control over how Lynx is embedded within your application.
+
+Follow the [Lynx integration guide](https://lynxjs.org/guide/start/integrate-with-existing-apps) to get started.
+
+## Next Steps
+
+- [What is Lynx Solid?](/guide/introduction) — Understand the architecture and key differences from Solid for Web
+- [Tutorial: Counter](/guide/tutorial-counter) — Build the counter step by step
+- [Main Thread Script](/guide/main-thread-script) — Zero-latency interactions on the main thread
