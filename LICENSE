@@ -19,15 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-`packages/compiler/babel-plugin-jsx-lynx` is a hard fork of
-`packages/babel-plugin-jsx` from dom-expressions
-(https://github.com/ryansolid/dom-expressions), which is also MIT licensed.
-See `packages/compiler/babel-plugin-jsx-lynx/UPSTREAM.md` for the base
-version, the list of fork-specific files, and the differences from upstream.
-
-This repository also contains code ported from vue-lynx, lynx-stack (React
-Lynx), lynx-examples and Elk. Those parts keep their own licenses — see
-`THIRD_PARTY_NOTICES.md`.

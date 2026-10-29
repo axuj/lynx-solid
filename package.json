@@ -5,6 +5,15 @@
   "private": true,
   "packageManager": "nub@0.9.7",
   "description": "Solid 2 → Lynx renderer (monorepo: runtime, compiler, plugin, sample apps)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/axuj/lynx-solid.git"
+  },
+  "homepage": "https://axuj.github.io/lynx-solid/",
+  "bugs": {
+    "url": "https://github.com/axuj/lynx-solid/issues"
+  },
   "engines": {
     "node": "26.x"
   },
