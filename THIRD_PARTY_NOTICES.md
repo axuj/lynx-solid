@@ -60,8 +60,12 @@ This product contains code derived from or inspired by the following projects:
 
 Brand assets: the documentation logo (`website/docs/public/logo.svg` and the
 derived `logo-dark.svg` / `favicon.svg`) is Solid's folded-ribbon mark, taken
-from the MIT-licensed solid-site artwork, with lynx ear tufts added on top; the
-Lynx name and mark belong to the Lynx project. This project is an independent
+from the MIT-licensed solid-site artwork, with the lightning bolt of the
+ReactLynx mark laid on the ribbon in a single neutral off-white, so the same
+mark holds on both the light and the dark ribbon. The bolt path is the one in
+the official `reactlynx-logo-light.svg` shipped by lynx-family/lynx-website
+(Apache-2.0). The Lynx name and mark belong to the Lynx project. This project
+is an independent
 piece of work — it is not affiliated with, sponsored by, or endorsed by either
 the Solid or the Lynx team. Both marks are used here only to indicate what this
 library targets.
