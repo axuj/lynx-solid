@@ -1,9 +1,13 @@
 # lynx-solid
 
+[![Deploy docs](https://github.com/axuj/lynx-solid/actions/workflows/pages.yml/badge.svg)](https://github.com/axuj/lynx-solid/actions/workflows/pages.yml)
+
 Solid 2 binding for [Lynx](https://lynxjs.org). Compiles Solid JSX into static
 skeletons instantiated on the main thread (MT) while the background thread (BG)
 drives dynamic holes through signals — one `INSTANTIATE` per template instance,
 zero ops for static subtrees.
+
+**Documentation: https://axuj.github.io/lynx-solid/**
 
 This repository is a monorepo. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) before
 opening a pull request.
@@ -108,8 +112,9 @@ nub run dev            # dev server for the elk example
 nub run lab:dev        # compiler playground (:5173)
 ```
 
-Full documentation lives in [`website/`](./website) — run
-`nub run -F @lynx-solid/website dev` to browse it locally.
+The docs are published at https://axuj.github.io/lynx-solid/ and built from
+[`website/`](./website) by `.github/workflows/pages.yml` on every push to
+`master`. To browse them locally, run `nub run -F @lynx-solid/website dev`.
 
 ## License
 
