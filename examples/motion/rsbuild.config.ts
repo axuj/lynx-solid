@@ -27,8 +27,8 @@ export default defineConfig({
   },
   source: {
     entry: {
-      'basic': './src/Basic/index.tsx',
-      'spring': './src/Spring/index.tsx',
+      'basic': './src/basic/index.tsx',
+      'spring': './src/spring/index.tsx',
       'motion-value': './src/MotionValue/index.tsx',
       'gesture': './src/iOSSlider/index.tsx',
     },
