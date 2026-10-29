@@ -1,3 +1,5 @@
+<p align="center"><img src="website/docs/public/logo.svg" width="104" alt="Lynx Solid"></p>
+
 # lynx-solid
 
 [![Deploy docs](https://github.com/axuj/lynx-solid/actions/workflows/pages.yml/badge.svg)](https://github.com/axuj/lynx-solid/actions/workflows/pages.yml)

@@ -15,7 +15,9 @@ export default defineConfig({
   title: 'Lynx Solid',
   description: 'Solid 2 framework for building Lynx apps',
   icon: '/favicon.svg',
-  logo: '/logo.svg',
+  // Two files rather than one: the mark's lower ribbons are dark navy, which
+  // disappears against a dark header — logo-dark lightens exactly those stops.
+  logo: { light: '/logo.svg', dark: '/logo-dark.svg' },
   logoText: 'Lynx Solid',
   lang: 'en',
   locales: [

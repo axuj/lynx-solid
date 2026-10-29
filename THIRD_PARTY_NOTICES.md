@@ -58,6 +58,14 @@ This product contains code derived from or inspired by the following projects:
   The reactivity core and component system. Used as-is, not modified — the same
   package and API as on the web; Lynx Solid only adds the renderer.
 
+Brand assets: the documentation logo (`website/docs/public/logo.svg` and the
+derived `logo-dark.svg` / `favicon.svg`) is Solid's folded-ribbon mark, taken
+from the MIT-licensed solid-site artwork, with lynx ear tufts added on top; the
+Lynx name and mark belong to the Lynx project. This project is an independent
+piece of work — it is not affiliated with, sponsored by, or endorsed by either
+the Solid or the Lynx team. Both marks are used here only to indicate what this
+library targets.
+
 ---
 
 Lynx Solid itself is released under the MIT license (see LICENSE). Nothing in
