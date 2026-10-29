@@ -7,6 +7,15 @@ import '@douyinfe/semi-ui/lib/es/_base/base.css'
 const config = {
   exampleBasePath: '/examples',
   defaultTab: 'web' as const,
+  // The QR tab says "scan with Lynx Explorer" and links the app name to the
+  // install instructions. go-web's built-in default points at lynxjs.org's
+  // docs path (`/guide/start/quick-start.html#download-lynx-explorer`), which
+  // does not exist on this site — relative to our base it 404s. Both point at
+  // the same anchor in this site's quick start, which the copy below adds.
+  explorerUrl: {
+    en: '/guide/quick-start#download-lynx-explorer',
+    cn: '/zh/guide/quick-start#download-lynx-explorer',
+  },
   ...rspressAdapter,
 }
 
