@@ -10,7 +10,7 @@ interface TodoItemProps {
   onDelete: (todo: Todo) => void
   onStartEdit: (todo: Todo) => void
   onUpdateEdit: (value: string) => void
-  onDoneEdit: (todo: Todo) => void
+  onDoneEdit: (todo: Todo, value?: string) => void
 }
 
 export function TodoItem(props: TodoItemProps) {
@@ -19,10 +19,10 @@ export function TodoItem(props: TodoItemProps) {
   }
 
   function onDoneEdit(e?: { detail?: { value?: string } }): void {
-    if (e) {
-      props.onUpdateEdit(e?.detail?.value ?? '')
-    }
-    props.onDoneEdit(props.todo)
+    // The pending text travels with the event, the way the header's
+    // `onConfirm` does. Reading it back out of the store would miss the last
+    // keystroke: setters don't make writes visible until the next flush.
+    props.onDoneEdit(props.todo, e?.detail?.value)
   }
 
   return (

@@ -73,12 +73,14 @@ export function TodoApp() {
     setEditText(todo.title)
   }
 
-  function doneEdit(todo: Todo): void {
+  function doneEdit(todo: Todo, value?: string): void {
     if (editedTodoId() !== todo.id) {
       return
     }
 
-    const title = editText().trim()
+    // Takes the pending text straight from the event rather than reading it
+    // back out of the store — that read would land before the write settled.
+    const title = (value ?? todo.title).trim()
     setEditedTodoId(null)
     setEditText('')
 
