@@ -1,4 +1,5 @@
 import path from 'node:path'
+import process from 'node:process'
 import { pluginSass } from '@rsbuild/plugin-sass'
 import { defineConfig } from '@rspress/core'
 import { pluginLlms } from '@rspress/plugin-llms'

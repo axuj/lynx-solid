@@ -1,0 +1,62 @@
+name: Release
+
+# Publishes @lynx-solid/{runtime,compiler,plugin} in lockstep.
+#
+# Auth is OIDC (npm trusted publishing): no NPM_TOKEN secret exists. The three
+# package settings on npmjs.com must list this repository + workflow under
+# "Trusted publishing". Provenance is attached automatically by npm in that
+# mode; `--provenance` is passed for the manual `workflow_dispatch` path too.
+#
+# The first release of a brand-new package cannot be trusted-published (the
+# package page does not exist yet), so bootstrap it once from a workstation and
+# then add the trusted publisher for each package.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Installs nub and provisions the Node pinned by `engines.node`, which
+      # also provides the npm CLI that performs the OIDC exchange.
+      - uses: nubjs/setup-nub@v0
+
+      - run: nub install --frozen-lockfile
+
+      - run: nub run lint
+      - run: nub run typecheck
+      - run: nub run verify:unit
+      - run: nub run build
+
+      - name: Check the tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(node -p "require('./packages/runtime/package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match package version v$version"
+            exit 1
+          fi
+
+      - name: Stage and pack (dry run)
+        if: github.event_name == 'workflow_dispatch'
+        run: node scripts/release.mjs --dry-run
+
+      - name: Publish
+        if: github.event_name == 'push'
+        run: node scripts/release.mjs --publish --provenance --tag latest
+        env:
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org/

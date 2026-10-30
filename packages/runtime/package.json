@@ -1,9 +1,26 @@
 {
   "name": "@lynx-solid/runtime",
   "type": "module",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Solid 2 runtime for Lynx — background + main-thread + shared ops protocol",
+  "version": "0.1.1",
+  "description": "Solid 2 runtime for Lynx — dual-thread background renderer, main-thread bootstrap, and the shared ops protocol",
+  "license": "MIT",
+  "homepage": "https://axuj.github.io/lynx-solid/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/axuj/lynx-solid.git",
+    "directory": "packages/runtime"
+  },
+  "bugs": {
+    "url": "https://github.com/axuj/lynx-solid/issues"
+  },
+  "keywords": [
+    "lynx",
+    "solid",
+    "solidjs",
+    "renderer",
+    "cross-thread",
+    "ui"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -36,19 +53,27 @@
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=22.14.0"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -b"
   },
-  "dependencies": {
-    "@solidjs/universal": "catalog:",
-    "background-only": "^0.0.1",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
     "solid-js": "catalog:"
+  },
+  "dependencies": {
+    "@lynx-js/types": "^4.3.0",
+    "@solidjs/universal": "catalog:"
   },
   "devDependencies": {
     "@dom-expressions/runtime": "0.50.0-next.44",
     "@lynx-js/type-element-api": "0.0.10",
-    "@lynx-js/types": "catalog:",
+    "solid-js": "catalog:",
     "typescript": "catalog:"
   }
 }

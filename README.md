@@ -29,15 +29,20 @@ opening a pull request.
 ## Install
 
 ```bash
-npm install @lynx-solid/runtime
+npm install solid-js @lynx-solid/runtime
+npm install -D @lynx-solid/plugin @lynx-js/rsbuild-plugin @rsbuild/core @lynx-js/types typescript
 ```
+
+`solid-js` is a peer dependency of the runtime: the app and the runtime have to
+share one copy, otherwise signals created in one module graph are invisible to
+the other. `@lynx-solid/plugin` pulls `@lynx-solid/compiler` in transitively.
 
 ## Usage
 
 Add the plugin to your `rsbuild.config.ts`:
 
 ```ts
-import { pluginSolidLynx } from '@lynx-solid/runtime/plugin'
+import { pluginSolidLynx } from '@lynx-solid/plugin'
 import { defineConfig } from '@rsbuild/core'
 
 export default defineConfig({
@@ -80,7 +85,7 @@ Requires `typescript` in the consuming project (the build loads TS configs).
 | `.` | BG runtime: `render` and cross-thread APIs (`initBackground` is auto-called by the plugin via `bootstrap.ts`); also the module compiled code imports universal helpers from |
 | `./lynx-template` | Template instantiation helpers imported by generated code (`registerTemplate` / `insert` / …) |
 | `./jsx-runtime` | JSX typings for Lynx intrinsics (`main-thread:*` props included) |
-| `./plugin` | `pluginSolidLynx()` rsbuild plugin (registers the Lynx build engine itself) |
+| `@lynx-solid/plugin` | `pluginSolidLynx()` rsbuild plugin (separate package; registers the Lynx build engine itself) |
 
 The main-thread bootstrap and internal ops protocol ship inside `dist/` but
 are consumed by the plugin through file paths — they are not part of the

@@ -29,18 +29,20 @@ import { PackageManagerTabs, Steps } from '@theme'
     "build": "rsbuild build"
   },
   "dependencies": {
-    "@lynx-solid/runtime": "workspace:*",
-    "solid-js": "2.0.0-rc.6"
+    "@lynx-solid/runtime": "^0.1.0",
+    "solid-js": "^2.0.0-rc.18"
   },
   "devDependencies": {
-    "@lynx-js/rsbuild-plugin": "0.1.4",
-    "@rsbuild/core": "2.2.9",
-    "@lynx-js/types": "4.1.0",
-    "@lynx-solid/plugin": "workspace:*",
+    "@lynx-js/rsbuild-plugin": "^0.1.6",
+    "@lynx-js/types": "^4.3.0",
+    "@lynx-solid/plugin": "^0.1.0",
+    "@rsbuild/core": "^2.2.14",
     "typescript": "^5.5.0"
   }
 }
 ```
+
+`@lynx-solid/plugin` 会带上 `@lynx-solid/compiler`，三个 `@lynx-solid/*` 包始终同版本发布。`solid-js` 是 runtime 的 peer 依赖——请保证应用里只有一份。
 
 ```ts title="rsbuild.config.ts"
 import { defineConfig } from '@rsbuild/core'

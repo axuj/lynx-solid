@@ -1,9 +1,25 @@
 {
   "name": "@lynx-solid/plugin",
   "type": "module",
-  "version": "0.1.0",
-  "private": true,
-  "description": "rsbuild plugin for @lynx-solid/runtime (entry splitting, worklet loaders, skeleton modules)",
+  "version": "0.1.1",
+  "description": "rsbuild plugin for @lynx-solid/runtime — entry splitting, worklet loaders, and skeleton modules",
+  "license": "MIT",
+  "homepage": "https://axuj.github.io/lynx-solid/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/axuj/lynx-solid.git",
+    "directory": "packages/plugin"
+  },
+  "bugs": {
+    "url": "https://github.com/axuj/lynx-solid/issues"
+  },
+  "keywords": [
+    "lynx",
+    "solid",
+    "rsbuild",
+    "rspeedy",
+    "plugin"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -22,12 +38,21 @@
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=22.14.0"
+  },
   "scripts": {
     "build": "rslib build",
     "typecheck": "tsc -b"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
-    "@rspack/core": "catalog:"
+    "@rsbuild/core": "catalog:",
+    "@rspack/core": "catalog:",
+    "@solidjs/signals": "^2.0.0-rc.18",
+    "solid-js": "catalog:"
   },
   "dependencies": {
     "@lynx-js/react": "catalog:",
@@ -36,12 +61,14 @@
     "@lynx-js/template-webpack-plugin": "catalog:",
     "@lynx-solid/compiler": "workspace:*",
     "@lynx-solid/runtime": "workspace:*",
-    "@rsbuild/core": "catalog:",
     "background-only": "^0.0.1",
     "html-entities": "^2.6.0"
   },
   "devDependencies": {
+    "@rsbuild/core": "catalog:",
     "@rslib/core": "catalog:",
+    "@solidjs/signals": "^2.0.0-rc.18",
+    "solid-js": "catalog:",
     "typescript": "catalog:"
   }
 }

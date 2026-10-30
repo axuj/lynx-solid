@@ -6,11 +6,11 @@
   "packageManager": "nub@0.9.7",
   "description": "Solid 2 → Lynx renderer (monorepo: runtime, compiler, plugin, sample apps)",
   "license": "MIT",
+  "homepage": "https://axuj.github.io/lynx-solid/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/axuj/lynx-solid.git"
   },
-  "homepage": "https://axuj.github.io/lynx-solid/",
   "bugs": {
     "url": "https://github.com/axuj/lynx-solid/issues"
   },
@@ -60,6 +60,8 @@
     "docs:dev:full": "nub run -F @lynx-solid/website dev:full",
     "docs:build": "nub run -F @lynx-solid/website build",
     "docs:typecheck": "nub run -F @lynx-solid/website typecheck",
+    "release:dry": "node scripts/release.mjs --dry-run",
+    "release:publish": "node scripts/release.mjs --publish --provenance",
     "dev": "nub run -F @lynx-solid/runtime build && nub run -F @lynx-solid/dev-elk dev"
   },
   "dependencies": {

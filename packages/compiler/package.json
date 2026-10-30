@@ -1,9 +1,25 @@
 {
   "name": "@lynx-solid/compiler",
   "type": "module",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Solid → Lynx compile pipeline: forked dom-expressions babel plugin + dom-compile + worklet-utils",
+  "version": "0.1.1",
+  "description": "Solid → Lynx compile pipeline — the forked dom-expressions Babel plugin, dom-compile, and worklet utilities",
+  "license": "MIT",
+  "homepage": "https://axuj.github.io/lynx-solid/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/axuj/lynx-solid.git",
+    "directory": "packages/compiler"
+  },
+  "bugs": {
+    "url": "https://github.com/axuj/lynx-solid/issues"
+  },
+  "keywords": [
+    "lynx",
+    "solid",
+    "compiler",
+    "babel-plugin",
+    "jsx"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -17,10 +33,16 @@
     "dist",
     "mt-macro.cjs"
   ],
+  "engines": {
+    "node": ">=22.14.0"
+  },
   "scripts": {
     "build": "tsc -b tsconfig.build.json && rslib build",
     "build:fork-plugin": "rslib build -c rslib.fork-plugin.config.ts",
     "typecheck": "tsc -b && tsc -b babel-plugin-jsx-lynx"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@babel/core": "^7.29.0",
