@@ -33,3 +33,31 @@
 
 - **受控输入**：Lynx `input` 的 `value` 是初始内容；应用在每次输入（`bindinput`）时将 `newTodo` / `editText` signal 的值写回，`bindconfirm` / `bindblur` 时提交。
 - **编辑流程**：点击 label 将整行切换为输入框（和 Web 规范一致）；空文本确认等于删除该项。
+
+## 异步变体：同样的 UI，接一个假服务端
+
+上面的移植把待办全放在 signal 里。`examples/todomvc-async` 是同一个应用，只是底下多了一层数据层：读取走
+`api.list()` 并由 `createOptimisticStore` 承接，每个 mutation 包在 `action` 里——先写入预期值，`yield` 请求，
+再 `refresh`。组件没有改：你本来写的那次写入，就是乐观预测本身。
+
+<Go example="todomvc-async" defaultFile="src/TodoApp.tsx" />
+
+```tsx
+const [todos, setTodos] = createOptimisticStore<Todo[]>(() => api.list(), [])
+
+const addTodo = action(function* (title: string) {
+  const todo = { id: uuid(), title: title.trim(), completed: false, pending: true }
+  setTodos(s => { s.push(todo) }) // 乐观写——立刻上屏
+  yield api.add(todo)             // 这一趟网络
+  refresh(todos)                  // 与数据源对账
+})
+```
+
+`pending` 只存在于乐观副本上，所以新行会变淡，直到数据源确认。请求抛错时乐观层被丢弃，列表回落到数据源说
+的样子——没有回滚代码，也没有要还原的快照。添加一条含 **`boom`** 的待办就能看到（`api.add` 会拒绝它）。
+
+用之前要知道两个代价：
+
+- **包体**：这个例子从 98.6 KB 变成 150.2 KB，`createOptimisticStore` 会把 store/reconcile 那套带进来。
+- **首屏**：`list()` 是异步的，又没有 SSR 上下文，所以首屏画出来的是骨架。异步数据永远不会落到主线程首屏——
+  见[数据获取](/zh/guide/data-fetching)。
