@@ -33,3 +33,37 @@ The reactivity and component layers are used as-is. Custom code is the dual-thre
 
 - **Controlled inputs**: Lynx `input` takes `value` as initial content; the app re-syncs it from the `newTodo` / `editText` signals on every keystroke (`bindinput`) and commits on `bindconfirm` / `bindblur`.
 - **Edit flow**: tapping a label swaps the row for an input (same as the web spec); confirming with empty text deletes the todo.
+
+## Async variant: the same UI over a fake server
+
+The port above keeps every todo in a signal. `examples/todomvc-async` is the same app
+with a data layer underneath: reads come from `api.list()` through
+`createOptimisticStore`, and each mutation runs inside an `action` that writes the
+expected value, `yield`s the request, then calls `refresh`. The components did not
+change — the write you already have *is* the optimistic prediction.
+
+<Go example="todomvc-async" defaultFile="src/TodoApp.tsx" />
+
+```tsx
+const [todos, setTodos] = createOptimisticStore<Todo[]>(() => api.list(), [])
+
+const addTodo = action(function* (title: string) {
+  const todo = { id: uuid(), title: title.trim(), completed: false, pending: true }
+  setTodos(s => { s.push(todo) }) // optimistic — on screen immediately
+  yield api.add(todo)             // the round trip
+  refresh(todos)                  // reconcile against the source
+})
+```
+
+`pending` is set only on the optimistic copy, so a new row dims until the source
+confirms it. If the request throws, the overlay is dropped and the list falls back to
+whatever the source says — no rollback code, no snapshot to restore. Add a todo
+containing **`boom`** to watch that happen (`api.add` rejects it).
+
+Two costs before you reach for it:
+
+- **Bundle**: 98.6 KB → 150.2 KB for this example. `createOptimisticStore` pulls the
+  store/reconcile machinery into the output.
+- **First screen**: `list()` is async and there is no SSR context, so the first paint
+  is the skeleton. Async data never lands on the main-thread first screen — see
+  [Data Fetching](/guide/data-fetching).
