@@ -126,48 +126,12 @@ Rsbuild v2.2.9
 
 ### 在原生设备上预览
 
-<span id="download-lynx-explorer"></span>要查看应用的原生渲染效果，请使用 **Lynx Explorer**。把上面预览切到**二维码**页扫码，或复制终端里的 **Lynx** bundle URL 并粘贴到 Lynx Explorer 的"Enter Card URL"中。
+要查看应用的原生渲染效果，请把上面预览切到**二维码**页，用 **Lynx Explorer** 扫码；或复制终端里的 **Lynx** bundle URL，粘贴到 Lynx Explorer 的 "Enter Card URL" 中。
 
-#### iOS 模拟器
+需要安装？iOS 模拟器包、Android APK 和源码构建方式以官方文档为准：**[下载 Lynx Explorer](https://lynxjs.org/zh/guide/start/quick-start.html#download-lynx-explorer)**。
 
-1. 从 [Mac App Store](https://apps.apple.com/us/app/xcode/id497799835) **安装 Xcode**。
-
-2. **下载 LynxExplorer**
-
-   对于 Apple Silicon (M1/M2/M3)，下载 [`LynxExplorer-arm64.app.tar.gz`](https://github.com/lynx-family/lynx/releases/latest/download/LynxExplorer-arm64.app.tar.gz)，然后解压：
-
-   ```bash
-   mkdir -p LynxExplorer-arm64.app/
-   tar -zxf LynxExplorer-arm64.app.tar.gz -C LynxExplorer-arm64.app/
-   ```
-
-   对于 Intel Mac，下载 [`LynxExplorer-x86_64.app.tar.gz`](https://github.com/lynx-family/lynx/releases/latest/download/LynxExplorer-x86_64.app.tar.gz)，然后解压：
-
-   ```bash
-   mkdir -p LynxExplorer-x86_64.app/
-   tar -zxf LynxExplorer-x86_64.app.tar.gz -C LynxExplorer-x86_64.app/
-   ```
-
-3. **安装到模拟器** — 打开 Xcode，选择 **Open Developer Tool** > **Simulator**，然后将 `.app` 文件夹拖入其中。
-
-#### Android
-
-从 [GitHub Releases](https://github.com/lynx-family/lynx/releases/latest/download/LynxExplorer-noasan-release.apk) 下载预构建的 APK 并安装到你的设备上。
-
-:::info 社区下载
-
-Lynx Explorer 也可在 [App Store](https://apps.apple.com/us/app/lynx-go-dev-explorer/id6743227790) 和 [Play Store](https://play.google.com/store/apps/details?id=com.funcs.io.lynx.go) 上获取，由社区贡献者发布。这些版本不由 Lynx 团队维护。
-
-:::
-
-:::details 从源码构建
-
-如果预构建的二进制文件不适用于你的环境，你可以从源码构建 Lynx Explorer：
-
-- [构建 iOS 版本](https://github.com/lynx-family/lynx/tree/develop/explorer/darwin/ios)
-- [构建 Android 版本](https://github.com/lynx-family/lynx/tree/develop/explorer/android)
-
-:::
+- **iOS**：把解压出来的 `.app` **拖进模拟器窗口**；双击会装到你自己的 Mac 上。
+- **Android**：安装 APK 时给浏览器或文件管理器开"允许安装未知来源应用"。
 
 ### 调试
 
