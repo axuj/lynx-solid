@@ -88,7 +88,7 @@ const BINARY_EXTENSIONS = new Set([
 ])
 
 // Directories to skip
-const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-ifr', '.cache', '.git', '.data', '.lynx', '.rspeedy', '.rslib'])
+const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-ifr', '.cache', '.git', '.data', '.lynx', '.rspeedy', '.rslib', 'sparkling-app'])
 
 // Examples the MT-IFR guide embeds with the IFR arm on. Their configs read
 // `LYNX_MT_IFR` (the switch and the output dir both follow it), so the second

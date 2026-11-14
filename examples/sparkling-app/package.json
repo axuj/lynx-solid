@@ -1,0 +1,48 @@
+{
+  "name": "@lynx-solid/example-sparkling-app",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "nub@0.9.7",
+  "description": "A real Android app: Solid on Lynx inside TikTok's Sparkling native shell",
+  "homepage": "https://axuj.github.io/lynx-solid/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/axuj/lynx-solid.git",
+    "directory": "examples/sparkling-app"
+  },
+  "workspaces": [],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "rspeedy dev --config ./lynx.config.ts",
+    "build": "rspeedy build --config ./lynx.config.ts && node scripts/copy-assets.mjs",
+    "build:bundle": "rspeedy build --config ./lynx.config.ts",
+    "copy-assets": "node scripts/copy-assets.mjs",
+    "autolink": "sparkling-app-cli autolink --platform android",
+    "android": "node scripts/android.mjs",
+    "toolchain": "node scripts/toolchain.mjs",
+    "doctor": "sparkling-app-cli doctor --platform android",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lynx-solid/runtime": "^0.1.1",
+    "solid-js": "2.0.0-rc.18",
+    "sparkling-navigation": "^2.0.1"
+  },
+  "devDependencies": {
+    "@lynx-js/qrcode-rsbuild-plugin": "^0.7.3",
+    "@lynx-js/rsbuild-plugin": "^0.1.8",
+    "@lynx-js/rspeedy": "^0.18.5",
+    "@lynx-js/tailwind-preset": "^0.5.1",
+    "@lynx-js/types": "^4.4.2",
+    "@lynx-solid/plugin": "^0.1.1",
+    "@rsbuild/core": "^2.3.2",
+    "@rspack/core": "^2.3.2",
+    "rsbuild-plugin-tailwindcss": "^0.2.4",
+    "sparkling-app-cli": "~2.0.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.9.3"
+  }
+}

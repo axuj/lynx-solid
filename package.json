@@ -21,6 +21,7 @@
     "packages": [
       "packages/*",
       "examples/*",
+      "!examples/sparkling-app",
       "website"
     ],
     "catalog": {

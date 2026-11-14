@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The window the system draws the instant the process starts, before any
+         Activity.onCreate runs. Without this the template falls back to the
+         AppCompat default: a white page with an action bar, which is the white
+         flash at cold start. Matching the app's own background makes the
+         hand-off to the first Lynx frame invisible. -->
+    <style name="AppLaunchTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/launch_background</item>
+        <item name="android:colorBackground">@color/launch_background</item>
+        <item name="android:statusBarColor">@color/launch_background</item>
+        <item name="android:navigationBarColor">@color/launch_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
