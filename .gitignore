@@ -26,3 +26,6 @@ packages/benchmark/results/examples-sweep*.md
 # (see packages/plugin/src/index.ts — they exist so the MT swc pass, which
 # rsbuild's builtin JS rule does not apply inside node_modules, can reach them)
 .lynx-solid/
+
+# ratoon's local worktree pool and hook state
+.ratoon/*
