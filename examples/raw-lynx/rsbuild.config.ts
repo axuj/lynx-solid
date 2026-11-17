@@ -12,12 +12,13 @@ import { defineConfig } from '@rsbuild/core'
 
 const MT_FILENAMES = ['.rspeedy/raw/main-thread.js']
 
-// MT entry worklet runtime — the official `@lynx-js/react/worklet-runtime`
-// subpath, resolved from the workspace root (same approach as the plugin's
-// entries) so the config survives reinstalls; the previous hardcoded store
-// path broke on every react upgrade.
+// MT entry worklet runtime — the official `@lynx-js/react/worklet-runtime/init`
+// subpath (0.129 replaced the bare `./worklet-runtime`), resolved from the
+// workspace root (same approach as the plugin's entries) so the config
+// survives reinstalls; the previous hardcoded store path broke on every react
+// upgrade.
 const require = createRequire(import.meta.url)
-const WORKLET_RUNTIME = require.resolve('@lynx-js/react/worklet-runtime')
+const WORKLET_RUNTIME = require.resolve('@lynx-js/react/worklet-runtime/init')
 
 class MarkMT {
   apply(compiler: any): void {
@@ -114,8 +115,20 @@ function rawLynx() {
 export default defineConfig({
   environments: { lynx: {} },
   source: {
+    // 0.129 ships the worklet runtime as ESM source that uses ES2021 syntax
+    // (`??=`), which Lepus (the MT encoder) rejects with `expecting ';'`.
+    // The plugin's own entries get downleveled by its MT loader; this demo is
+    // hand-wired, so it asks swc to transpile the package explicitly.
+    include: [/[\\/]@lynx-js[\\/]react[\\/]/],
     entry: {
       raw: './src/bg.js',
+    },
+  },
+  tools: {
+    swc: {
+      jsc: {
+        target: 'es2019',
+      },
     },
   },
   server: {
