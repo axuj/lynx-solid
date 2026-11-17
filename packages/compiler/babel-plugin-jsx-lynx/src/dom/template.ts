@@ -2,6 +2,7 @@ import * as t from "@babel/types";
 import {
   getConfig,
   getNumberedId,
+  getSetupStatement,
   registerImportMethod
 } from "../shared/utils";
 import {
@@ -49,7 +50,11 @@ export function createTemplate(
       const isVarInit = t.isVariableDeclarator(path.parent) && path.parent.init === path.node;
 
       if (isReturnArg || isVarInit) {
-        path.getStatementParent()?.insertBefore(stmts as t.Statement[]);
+        // Ported from upstream solidjs/solid #4450: a braceless `if`/`else`/
+        // loop body is not a statement list, so `getStatementParent()` climbs
+        // to the whole branch and the setup would run (and read loop bindings)
+        // outside it. Inserting before the `return` makes Babel wrap the body.
+        getSetupStatement(path)?.insertBefore(stmts as t.Statement[]);
         return result.id;
       }
 
