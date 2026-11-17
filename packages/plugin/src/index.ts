@@ -553,7 +553,10 @@ export function pluginSolidLynx(options: SolidLynxPluginOptions = {}): RsbuildPl
         // it must evaluate as part of the entry graph on web AND device
         // (encode-time chunk injection only covers the lynx path and breaks
         // web preview, where nothing else provides the worklet globals).
-        const workletRuntimePath = require.resolve('@lynx-js/react/worklet-runtime')
+        // @lynx-js/react 0.129 replaced the old `./worklet-runtime` subpath
+        // with `./worklet-runtime/init` (the self-initializing entry; the
+        // `bindings` subpath still carries the types/classes).
+        const workletRuntimePath = require.resolve('@lynx-js/react/worklet-runtime/init')
 
         // Upstream leak (see src/server-functions-stub.ts): the server-function
         // client evaluates `new TextEncoder()` at import time and the router
