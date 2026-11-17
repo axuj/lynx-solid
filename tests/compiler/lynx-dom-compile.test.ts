@@ -749,3 +749,45 @@ function App() {
     expect(() => compileDomModule(src)).toThrow(/outermost element/)
   })
 })
+
+describe('object-valued style / class readShallow wrapping (#3326)', () => {
+  it('wraps non-inline style/class expressions in readShallow', () => {
+    const src = `
+function App(p: { s: object, cls: object }) {
+  return <view>
+    <view style={p.s} class={p.cls} />
+  </view>
+}
+`
+    const { code } = compileDomModule(src)
+    expect(code).toContain('readShallow as _\$readShallow')
+    expect(code).toContain('_\$readShallow(p.s)')
+    expect(code).toContain('_\$readShallow(p.cls)')
+  })
+
+  it('skips readShallow for strings, template literals and literal objects/arrays', () => {
+    const src = `
+function App(c: () => string, w: () => number) {
+  return <view>
+    <view style={\`width:\${w()}px\`} class={\`c \${c()}\`} />
+    <view style={{ color: c(), width: w() + 'px' }} class={{ active: c() === 'x' }} />
+    <view class={c() + ' suffix'} />
+  </view>
+}
+`
+    const { code } = compileDomModule(src)
+    expect(code).not.toContain('readShallow')
+    expect(code).toMatch(/_\$style\(/)
+    expect(code).toMatch(/_\$className\(/)
+  })
+
+  it('still wraps non-literal arrays (an element may be a proxy)', () => {
+    const src = `
+function App(p: { classes: unknown[] }) {
+  return <view class={p.classes} />
+}
+`
+    const { code } = compileDomModule(src)
+    expect(code).toContain('_\$readShallow(p.classes)')
+  })
+})

@@ -22,6 +22,7 @@
  */
 
 import { createRenderer } from '@solidjs/universal'
+import { $PROXY } from 'solid-js'
 
 import { errorMessage, errorStack } from '../internal/error'
 import { applyMainThreadKey, applyPlainAttr } from './attr-core'
@@ -275,6 +276,49 @@ export function style(
 }
 
 /**
+ * Compiler-emitted primitive; not for hand-written code. @internal
+ *
+ * Read an object-valued `style` / `class` binding ONE layer deep, TRACKED, in
+ * the compute half of its effect. (Not Solid's `snapshot()`, which is a deep,
+ * untracked structural copy.) `style()` and `className()` enumerate their
+ * object in the effect's untracked commit phase, so a proxy-backed object (a
+ * store sub-object, merged props) was identity-reactive only: in-place key
+ * mutations never re-applied and every leaf read tripped
+ * STRICT_READ_UNTRACKED in dev. The compiler wraps the compute value of a
+ * non-inline `style={expr}` / `class={expr}` in this; spread() applies it to
+ * those two keys as it copies. Inline literals never get here — they compile
+ * per property. Identity passthrough for strings and plain objects (a fresh
+ * literal is already the compute's own); a proxy is copied with ONE
+ * `ownKeys` trap (its own trap keeps the key set tracked) plus one tracked
+ * read per key; arrays are re-mapped only if an element is a proxy.
+ */
+export function readShallow(value: unknown): unknown {
+  if (value === null || typeof value !== 'object')
+    return value
+  if (Array.isArray(value)) {
+    let out: unknown[] | null = null
+    for (let i = 0; i < value.length; i++) {
+      const item = value[i]
+      const shallow = readShallow(item)
+      if (shallow !== item && out === null)
+        out = value.slice(0, i)
+      if (out !== null)
+        out.push(shallow)
+    }
+    return out === null ? value : out
+  }
+  // Store proxies answer `$PROXY` with themselves; plain objects/arrays don't.
+  if (Reflect.get(value, $PROXY) !== value)
+    return value
+  const out: Record<string, unknown> = {}
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key === 'string')
+      out[key] = Reflect.get(value, key)
+  }
+  return out
+}
+
+/**
  * dom-runtime spread: apply each prop through the attribute pipeline
  * (class/style/event detection all ride setAttribute). Children and ref are
  * handled by their own compiled paths, so they are skipped here.
@@ -287,7 +331,8 @@ export function spread(
   for (const [key, value] of Object.entries(props ?? {})) {
     if (key === 'children' || key === 'ref')
       continue
-    setAttribute(root, root, key, value)
+    // Object-valued style/class are read here, tracked (see readShallow()).
+    setAttribute(root, root, key, key === 'style' || key === 'class' ? readShallow(value) : value)
   }
 }
 

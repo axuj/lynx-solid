@@ -164,6 +164,32 @@ function registerTemplate(path: NodePath, results: TransformResult) {
   results.decl = t.variableDeclaration("var", results.declarations);
 }
 
+/** A non-inline object-valued `style` / `class` binding is read in the TRACKED
+ * half of its effect through `readShallow()`: `style()`/`className()` enumerate
+ * their object in the untracked commit phase, so a proxy value (a store
+ * sub-object, merged props) would be identity-reactive only. Skipped when the
+ * expression is provably a string or a fresh literal (`readShallow` would pass
+ * those through anyway; the call is what's saved). Port of solidjs/solid#3326. */
+function wrapReadShallow(path: NodePath, key: string, value: t.Expression): t.Expression {
+  if (key !== "class" && key !== "style") return value;
+  if (
+    t.isStringLiteral(value) ||
+    t.isTemplateLiteral(value) ||
+    t.isBinaryExpression(value) ||
+    t.isObjectExpression(value) ||
+    // a class array of literals cannot hold a proxy either
+    (t.isArrayExpression(value) &&
+      value.elements.every(
+        e => t.isStringLiteral(e) || t.isTemplateLiteral(e) || t.isObjectExpression(e)
+      ))
+  )
+    return value;
+  return t.callExpression(
+    registerImportMethod(path, "readShallow", getConfig(path).moduleName),
+    [value]
+  );
+}
+
 function wrapDynamics(path: NodePath, dynamics: DynamicBinding[]) {
   if (!dynamics.length) return;
   const config = getConfig(path);
@@ -181,7 +207,7 @@ function wrapDynamics(path: NodePath, dynamics: DynamicBinding[]) {
     const newValue = t.identifier("_v$");
     return t.expressionStatement(
       t.callExpression(effectWrapperId, [
-        wrapForEffect(dynamics[0].value),
+        wrapForEffect(wrapReadShallow(path, dynamics[0].key, dynamics[0].value)),
         t.arrowFunctionExpression(
           prevValue ? [newValue, prevValue] : [newValue],
           t.blockStatement([
@@ -210,7 +236,7 @@ function wrapDynamics(path: NodePath, dynamics: DynamicBinding[]) {
     const optionalPropMember = t.optionalMemberExpression(prevId, propIdent, false, true);
 
     properties.push(propIdent);
-    values.push(t.objectProperty(propIdent, value));
+    values.push(t.objectProperty(propIdent, wrapReadShallow(path, key, value)));
 
     if (key === "class" || key === "style" || isStatefulDOMProperty(tagName, key)) {
       statements.push(
