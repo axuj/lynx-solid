@@ -34,11 +34,11 @@
       "@rsbuild/core": "2.3.2",
       "@rslib/core": "^1.0.7",
       "@rspack/core": "^2.3.2",
-      "@solidjs/universal": "2.0.0-rc.18",
+      "@solidjs/universal": "2.0.0-rc.22",
       "eslint": "^10.13.0",
       "rsbuild-plugin-tailwindcss": "^0.2.4",
       "sass": "^1.106.1",
-      "solid-js": "2.0.0-rc.18",
+      "solid-js": "2.0.0-rc.22",
       "tailwindcss": "^3.4.17",
       "typescript": "^5.5.0",
       "vitest": "^3.0.0"
@@ -109,10 +109,10 @@
     "@rspack/core": "catalog:",
     "@solidjs/meta": "^1.0.0-next.2",
     "@solidjs/router": "2.0.0-next.42",
-    "@solidjs/signals": "2.0.0-rc.18",
+    "@solidjs/signals": "2.0.0-rc.22",
     "@solidjs/universal": "catalog:",
     "@solidjs/vite-plugin": "^3.0.0-next.39",
-    "@solidjs/web": "2.0.0-rc.18",
+    "@solidjs/web": "2.0.0-rc.22",
     "@tanstack/router-plugin": "^1.168.48",
     "@types/babel__core": "^7.20.5",
     "@types/babel__generator": "^7.6.8",
@@ -142,6 +142,6 @@
   },
   "overrides": {
     "@babel/standalone": "8.0.4",
-    "@solidjs/signals": "2.0.0-rc.18"
+    "@solidjs/signals": "2.0.0-rc.22"
   }
 }
