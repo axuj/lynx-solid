@@ -1,0 +1,21 @@
+{
+  "extends": "../../config/tsconfig/base.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "@lynx-solid/runtime",
+    "lib": ["ES2022", "DOM"],
+    // `"paths": {}` clears base.json's src aliases on purpose: rspack reads the
+    // nearest tsconfig.json for path mapping, and the aliases would split the
+    // runtime singleton between the app and the package (blank page, no error).
+    "paths": {},
+    // This one config covers both halves: the UI (Lynx globals from
+    // @lynx-js/types, which also types `NativeModules.bridge`) and the main
+    // process (Node globals, `@lynx-js/lynxtron`).
+    "types": ["node", "@lynx-js/types"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true
+  },
+  "include": ["src"]
+}

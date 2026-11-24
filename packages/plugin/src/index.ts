@@ -544,10 +544,17 @@ export function pluginSolidLynx(options: SolidLynxPluginOptions = {}): RsbuildPl
         const require = createRequire(import.meta.url)
         const rootPath = api.context.rootPath
         // Auto-init module prepended to every background entry (see the
-        // background entry below). Resolved through the exports map: tsc
-        // emits src/background/bootstrap.ts →
-        // dist/background/bootstrap.js.
-        const backgroundBootstrap = require.resolve('@lynx-solid/runtime/bootstrap')
+        // background entry below).
+        //
+        // A bare specifier, resolved by the bundler from the app like any
+        // other import — NOT a path from `require.resolve()` here. The
+        // runtime keeps its flush state (the ops executor installed by
+        // initBackground) in module scope, so a bootstrap from a second copy
+        // of the package installs the executor in that copy while the app's
+        // `render` drains through the first one: every batch is dropped into
+        // a null executor, the page stays blank, and nothing throws. Resolving
+        // through the app's graph is what makes both imports one tree.
+        const backgroundBootstrap = '@lynx-solid/runtime/bootstrap'
         // Official worklet runtime (self-initializing IIFE), reused verbatim.
         // Bundled into every MT entry:
         // it must evaluate as part of the entry graph on web AND device

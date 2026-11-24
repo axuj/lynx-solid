@@ -146,16 +146,13 @@ Lynx 有自己的事件系统，每个事件注册都带类型：`bind` 冒泡�
 | 主线程脚本 ref | `useMainThreadRef(null)` | `useMainThreadRef(null)` |
 | `'main thread'` 指令 | `'main thread'` | `'main thread'` |
 
-## 跑例子
+## 在本仓库里跑
+
+上面的教程是从零写一遍。写好的版本在仓库里是 `examples/counter`；在仓库根目录（这个仓库用 `nub`，它钉在 `package.json` 里）：
 
 ```bash
-# 装依赖
 nub install
-
-# 构建运行时
-nub run build
-
-# 起 dev server
+nub run build            # 示例要引用的运行时包
 cd examples/counter && nub run dev
 ```
 

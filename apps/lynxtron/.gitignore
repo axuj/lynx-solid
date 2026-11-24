@@ -1,0 +1,7 @@
+node_modules/
+dist/
+dist-dev/
+output/
+.rspeedy/
+.lynx/
+*.log

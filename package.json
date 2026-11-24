@@ -21,7 +21,6 @@
     "packages": [
       "packages/*",
       "examples/*",
-      "!examples/sparkling-app",
       "website"
     ],
     "catalog": {
@@ -45,6 +44,10 @@
     }
   },
   "scripts": {
+    "check:pins": "node scripts/check-app-pins.mjs",
+    "verify:lynxtron": "node apps/lynxtron/scripts/verify.mjs",
+    "verify:sparkling": "node apps/sparkling-app/scripts/verify.mjs",
+    "verify:apps": "node apps/lynxtron/scripts/verify.mjs && node apps/sparkling-app/scripts/verify.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint --fix --cache .",
     "typecheck": "nub run -F @lynx-solid/runtime build && nub run -F @lynx-solid/runtime typecheck && nub run -F @lynx-solid/compiler typecheck && nub run -F @lynx-solid/plugin typecheck && tsc --noEmit -p ./tests/tsconfig.json",

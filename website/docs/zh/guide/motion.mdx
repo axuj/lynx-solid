@@ -1,3 +1,5 @@
+import { PackageManagerTabs } from '@theme'
+
 # Motion
 
 export const sliderGesture = {
@@ -31,9 +33,7 @@ export const sliderGesture = {
 
 ## 安装
 
-```bash
-nub add motion-dom
-```
+<PackageManagerTabs command="install motion-dom" />
 
 case 只经 `../adapters` 一条根边进 shared 图（根边显式标 `with { runtime: 'shared' }`，barrel 随后导入的一切由 shared 层级联自动跟入——见[主线程脚本](/zh/guide/main-thread-script#跨线程共享模块)）：
 

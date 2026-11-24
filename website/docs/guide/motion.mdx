@@ -1,3 +1,5 @@
+import { PackageManagerTabs } from '@theme'
+
 # Motion
 
 export const sliderGesture = {
@@ -33,9 +35,7 @@ Animation demos driven by [`motion-dom`](https://motion.dev/) on the main thread
 
 ## Install
 
-```bash
-nub add motion-dom
-```
+<PackageManagerTabs command="install motion-dom" />
 
 A case enters the shared graph through the single `../adapters` root edge (the root edge carries `with { runtime: 'shared' }` explicitly; everything the barrel then imports follows onto the shared layer transitively — see [Main Thread Script](/guide/main-thread-script#cross-thread-shared-modules)):
 

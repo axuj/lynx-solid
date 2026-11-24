@@ -207,7 +207,52 @@ adb shell am start -W -n com.lynxsolid.demo/com.example.sparkling.go.SplashActiv
 |---|---|---|
 | Solid pages, styles, logic | `nub run dev` + Lynx Explorer | seconds |
 | `android/`, native methods | `nub run android` | minutes |
-| Debugging | `adb logcat -s Lynx` | — |
+| View tree, taps, JS console (debug build) | `npx agent-lynx snapshot` / `tap` / `get-console` | seconds |
+| Engine and native logs | `adb logcat -s Lynx` | — |
+
+## Debugging
+
+The debug build turns on Lynx's devtool, LogBox and the debug engine; the
+release build turns all three off. That is the ~3x cold-start gap above, and
+it is why there is something to debug in `debug` and nothing in `release`.
+
+### In the app
+
+- **LogBox** draws JS errors and `console.*` on screen instead of leaving a
+  white frame.
+- **DevTool on 8901.** A debug build starts Lynx's devtool server, so
+  [`agent-lynx`](https://www.npmjs.com/package/agent-lynx) can read the view
+  tree and drive the app over USB:
+
+  ```bash
+  npx agent-lynx list-clients   # "Solid on Sparkling", com.lynxsolid.demo
+  npx agent-lynx snapshot       # view tree with @eN refs
+  npx agent-lynx tap @e15       # the Increment button: count 0 -> 1
+  npx agent-lynx get-console    # JS console
+  npx agent-lynx screenshot -o shot.png
+  ```
+
+  Take the snapshot after the first page has settled: refs carry dp
+  coordinates from that snapshot, and one taken during the splash screen
+  points at the wrong place. If discovery suddenly finds nothing, check
+  `adb forward --list` and remove a stale `tcp:8901` forward — `agent-lynx`
+  connects to the device socket itself.
+- **`adb logcat`** for everything below JS:
+  `adb logcat -s Lynx LynxDevtool DebugRouter`.
+
+### Native
+
+Open `android/` in Android Studio for breakpoints and the layout inspector;
+`nub run android` drives the same Gradle project. Without Studio, `adb logcat`
+and `agent-lynx` cover the JS/Lynx side.
+
+The three `LynxEnv` switches in `SparklingApplication.initHybridKit` are the
+only debug-only wiring in the shell, and they must stay **after**
+`HybridKit.initLynxKit()` — that call is what runs `LynxEnv.init`, and before
+it `enableLynxDebug` bails without a context while `setDevtoolEnv` is guarded
+by `isNativeLibraryLoaded()`. Sparkling 2.0.1's own template sets them before,
+where they record the flags and do nothing: no error, but nothing listens on
+8901 and no DevTool client is reachable.
 
 ## Known limitations
 
@@ -221,8 +266,12 @@ adb shell am start -W -n com.lynxsolid.demo/com.example.sparkling.go.SplashActiv
    even when `java -version` works (it only reads stderr when the child throws,
    but `java -version` exits 0 with its output on stderr), and it rejects
    Node 26. Trust `nub run build` / `nub run android` instead.
-3. **The 2.0.1 template has no dev-URL input screen.** Use Lynx Explorer for JS
-   hot reload on a device; native changes require a rebuild.
+3. **No dev server in 2.0.1.** The in-app dev-server workflow (Settings card, pipe
+   API, fallback dialog) is 2.1-only: `sparkling-debug-tool` starts at
+   `2.1.0-rc.2`, and there is no 2.0.x build. The Debug Panel and `agent-lynx`
+   still work here, but the bundle is always read from the APK. Iterate on JS
+   pages with `nub run dev` + Lynx Explorer (seconds); anything the app itself
+   must load — JS or native — needs `nub run android` to rebuild and reinstall.
 4. **The native engine is Lynx 3.6.0.** Our bundles target SDK 3.2, which is
    backward compatible. Moving to the 4.x engine means upgrading
    AGP/Kotlin/Gradle together and is out of scope for this example.

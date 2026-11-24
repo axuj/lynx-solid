@@ -1,0 +1,42 @@
+name: Check app pins
+
+# The apps under `apps/` pin published `@lynx-solid/*` releases, so a version
+# bump in `packages/*` has to bump them too. This job keeps that bump in the
+# same pull request, where the red is caused by the diff itself.
+# Comparing against the registry instead would leave unrelated pull requests red
+# until someone remembers, long after the release.
+#
+# The pull requests for this repository are opened on a mirror that runs no
+# workflows, so `push` to master is the trigger that actually fires today —
+# later than ideal, but the only place a runner exists. `pull_request` stays for
+# pull requests opened on GitHub itself.
+on:
+  pull_request:
+    paths:
+      - apps/*/package.json
+      - packages/*/package.json
+      - scripts/check-app-pins.mjs
+      - .github/workflows/checks.yml
+  push:
+    branches: [master]
+    paths:
+      - apps/*/package.json
+      - packages/*/package.json
+      - scripts/check-app-pins.mjs
+      - .github/workflows/checks.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  app-pins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Drop-in for actions/setup-node. Installs nub and provisions the Node
+      # this repo pins (`engines.node: 26.x`) onto PATH.
+      - uses: nubjs/setup-nub@v0
+
+      - run: node scripts/check-app-pins.mjs

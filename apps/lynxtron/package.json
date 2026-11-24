@@ -1,0 +1,50 @@
+{
+  "name": "@lynx-solid/dev-lynxtron",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A desktop app: Solid on Lynx inside the Lynxtron shell",
+  "homepage": "https://axuj.github.io/lynx-solid/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/axuj/lynx-solid.git",
+    "directory": "apps/lynxtron"
+  },
+  "main": "main.js",
+  "workspaces": [],
+  "engines": {
+    "node": "26.x"
+  },
+  "scripts": {
+    "dev": "concurrently -k --prefix none \"rsbuild dev --config rsbuild.config.ts\" \"rsbuild dev --config rsbuild.desktop.config.ts\"",
+    "build:ui": "rsbuild build --config rsbuild.config.ts",
+    "build:desktop": "rsbuild build --config rsbuild.desktop.config.ts",
+    "build": "rsbuild build --config rsbuild.config.ts && rsbuild build --config rsbuild.desktop.config.ts",
+    "start": "nub run build && lynxtron dist/desktop",
+    "verify": "node scripts/verify.mjs",
+    "typecheck": "tsc --noEmit -p ./tsconfig.json"
+  },
+  "dependencies": {
+    "@lynx-solid/plugin": "^0.1.1",
+    "@lynx-solid/runtime": "^0.1.1",
+    "solid-js": "^2.0.0-rc.18"
+  },
+  "devDependencies": {
+    "@lynx-js/lynxtron": "^0.0.31",
+    "@lynx-js/lynxtron-dev-plugins": "^0.0.31",
+    "@lynx-js/rsbuild-plugin": "^0.1.6",
+    "@lynx-js/tailwind-preset": "^0.5.1",
+    "@lynx-js/types": "^4.3.0",
+    "@rsbuild/core": "^2.2.14",
+    "@rspack/core": "^2.2.9",
+    "@solidjs/signals": "^2.0.0-rc.18",
+    "@types/node": "^26.6.5",
+    "concurrently": "^8.2.2",
+    "rsbuild-plugin-tailwindcss": "^0.2.4",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.5.0"
+  },
+  "allowScripts": {
+    "@lynx-js/lynxtron": true
+  }
+}

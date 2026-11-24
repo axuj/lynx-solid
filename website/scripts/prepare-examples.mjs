@@ -87,8 +87,10 @@ const BINARY_EXTENSIONS = new Set([
   '.tif',
 ])
 
-// Directories to skip
-const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-ifr', '.cache', '.git', '.data', '.lynx', '.rspeedy', '.rslib', 'sparkling-app'])
+// Directories to skip. The native apps under `apps/` are not scanned at all —
+// they have no `web.bundle` to embed and build their own desktop/Android
+// artefacts, so the docs must not try.
+const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-ifr', '.cache', '.git', '.data', '.lynx', '.rspeedy', '.rslib'])
 
 // Examples the MT-IFR guide embeds with the IFR arm on. Their configs read
 // `LYNX_MT_IFR` (the switch and the output dir both follow it), so the second

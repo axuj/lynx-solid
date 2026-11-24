@@ -174,13 +174,54 @@ adb shell am start -W -n com.lynxsolid.demo/com.example.sparkling.go.SplashActiv
 |---|---|---|
 | Solid 页面、样式、逻辑 | `nub run dev` + Lynx Explorer | 秒级 |
 | `android/`、原生 method | `nub run android` | 分钟级 |
-| 排错 | `adb logcat -s Lynx` | — |
+| 视图树、点击、JS console（debug 包） | `npx agent-lynx snapshot` / `tap` / `get-console` | 秒级 |
+| 引擎和原生日志 | `adb logcat -s Lynx` | — |
+
+## 调试
+
+debug 包打开 Lynx 的 devtool、LogBox 和调试引擎，release 包三个都关。这就是上面
+冷启动差 ~3 倍的原因，也是“要调试就用 debug 包”的原因。
+
+### 在 App 里
+
+- **LogBox**：JS 报错和 `console.*` 直接画在屏幕上，不会只剩一帧白屏。
+- **8901 上的 DevTool**：debug 包会起 Lynx 的 devtool server，用
+  [`agent-lynx`](https://www.npmjs.com/package/agent-lynx) 通过 USB 读视图树、驱动 App：
+
+  ```bash
+  npx agent-lynx list-clients   # "Solid on Sparkling"，com.lynxsolid.demo
+  npx agent-lynx snapshot       # 带 @eN 引用的视图树
+  npx agent-lynx tap @e15       # 点 Increment：count 0 -> 1
+  npx agent-lynx get-console    # JS console
+  npx agent-lynx screenshot -o shot.png
+  ```
+
+  等首页布局稳定后再 snapshot：引用里带的是那次快照的 dp 坐标，启动画面/首帧时拍的
+  快照会点到别处。如果突然发现不了客户端，先看 `adb forward --list`，把残留的
+  `tcp:8901` forward 删掉——`agent-lynx` 直接连设备上的 socket。
+- **`adb logcat`** 看 JS 以下的东西：
+  `adb logcat -s Lynx LynxDevtool DebugRouter`。
+
+### 原生
+
+用 Android Studio 打开 `android/` 打断点、看布局；`nub run android` 用的是同一个
+Gradle 工程。没有 Studio 时，JS/Lynx 侧靠 `adb logcat` 和 `agent-lynx`。
+
+壳里唯一的 debug-only 接线是 `SparklingApplication.initHybridKit` 里那三个
+`LynxEnv` 开关，它们必须留在 `HybridKit.initLynxKit()` **之后**——这个调用才会跑
+`LynxEnv.init`，在此之前 `enableLynxDebug` 因为没有 context 直接返回，
+`setDevtoolEnv` 又被 `isNativeLibraryLoaded()` 挡着。Sparkling 2.0.1 自带的模板写在
+前面，那里它们只把标志记下来，什么都不做：不报错，但 8901 不监听，DevTool 也连不上。
 
 ## 已知限制
 
 1. **Windows 上的 CLI bug（两处）**：`sparkling-app-cli` 2.0.1 用 `spawn('rspeedy')` 启动构建，Windows 下无法解析 `rspeedy.cmd`；`autolink` 读 `app.config.ts` 时把绝对路径直接丢给 ESM loader，报 `ERR_UNSUPPORTED_ESM_URL_SCHEME`。前者由 `scripts/android.mjs` 用 `shell: true` 绕过；后者会回退到默认目录（本示例的目录结构就是默认值，所以结果正确）。
 2. **`sparkling doctor` 在这里不可靠**：`java -version` 明明可用，它也会报 JDK 缺失（它只在子进程抛异常时才读 stderr，而 `java -version` 是退出码 0、输出在 stderr）；同时它还不认 Node 26。以 `nub run build` / `nub run android` 为准。
-3. **2.0.1 模板没有 dev URL 输入面板**：真机上的 JS 热更请用 Lynx Explorer；APK 需要重新构建。
+3. **2.0.1 没有 dev server**：app 内从 dev server 加载 bundle 那套（Settings 卡片、
+   pipe API、失败回退弹窗）是 2.1 才有的，`sparkling-debug-tool` 从 `2.1.0-rc.2`
+   开始发，没有 2.0.x。这里能用的仍是 Debug Panel 和 `agent-lynx`，但 bundle 永远从
+   APK 读：改 JS 页面用 `nub run dev` + Lynx Explorer 秒级预览；要让 app 自己加载新
+   内容——不管是 JS 还是原生——都得 `nub run android` 重新打包安装。
 4. **原生引擎是 Lynx 3.6.0**：我们产出的 bundle `targetSdkVersion` 是 3.2，向后兼容。要换 4.x 引擎需要整体升级 AGP/Kotlin/Gradle，超出示例范围。
 5. **JDK toolchain 改成 17**：Sparkling 模板默认强制 JDK 11 toolchain（`android/build.gradle.kts` 里的 `targetJavaVersion` / `jvmToolchain`），示例改成 17，这样只需要装一个 JDK。如果你的环境只能用 JDK 11，把 `targetJavaVersion`、`jvmToolchain`、`sourceCompatibility`、`targetCompatibility`、`jvmTarget` 五处一起改回 11 即可。
 6. **APK 体积**：debug 包约 70 MB，因为 `abiFilters` 同时打了 `arm64-v8a` 和 `armeabi-v7a`，且没开 minify。真机验证只留 `arm64-v8a`（改 `android/app/build.gradle.kts` 的 `abiFilters`）可减半；发布用 `assembleRelease` + R8。

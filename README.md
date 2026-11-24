@@ -22,7 +22,8 @@ opening a pull request.
 | [`packages/compiler`](./packages/compiler) | `@lynx-solid/compiler` — Solid JSX → Lynx skeleton compiler, plus the dom-expressions fork it builds on |
 | [`packages/plugin`](./packages/plugin) | `@lynx-solid/plugin` — `pluginSolidLynx()`, the rsbuild/rspeedy plugin that wires both threads together |
 | [`packages/benchmark`](./packages/benchmark) | Device and bundle-size benchmarks |
-| [`examples`](./examples) | Sample apps (counter, todomvc, 7guis, hackernews, elk, motion, …) |
+| [`examples`](./examples) | Web-previewable sample apps (counter, todomvc, 7guis, hackernews, elk, motion, …) |
+| [`apps`](./apps) | Apps for a native host — Lynxtron desktop, Sparkling Android. Install published `@lynx-solid/*`; not workspace members |
 | [`website`](./website) | Documentation site |
 | [`compile-lab`](./compile-lab) | Compiler playground for inspecting generated skeletons |
 

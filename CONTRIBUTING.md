@@ -39,6 +39,10 @@ You rarely need to run all of them. Scope the checks to what you touched:
 - `examples/<demo>` → that example's `typecheck`. Only run `build` (and
   `prepare-examples` + `website build`) when you changed `rsbuild.config.ts` or
   need a fresh `dist/`.
+- `apps/<name>` → `nub run verify:<name>` at the root, which builds the app
+  against a packed copy of `packages/*` and drives it on its host (an Electron
+  window, or a phone for Sparkling). These are outside the workspace and install
+  published versions, so they are the only place a release is exercised end to end.
 - `website/docs` → `nub run -F @lynx-solid/website build` to check MDX compiles.
 
 `prepare-examples` owns `examples/*/dist/` and `dist-ifr/`. It records the build

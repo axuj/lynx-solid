@@ -9,6 +9,7 @@ import com.facebook.drawee.backends.pipeline.Fresco
 import com.facebook.imagepipeline.core.ImagePipelineConfig
 import com.facebook.imagepipeline.memory.PoolConfig
 import com.facebook.imagepipeline.memory.PoolFactory
+import com.lynx.tasm.LynxEnv
 import com.lynx.tasm.behavior.Behavior
 import com.lynx.tasm.behavior.LynxContext
 import com.lynx.tasm.behavior.ui.LynxUI
@@ -66,6 +67,21 @@ class SparklingApplication : Application() {
         }
         HybridKit.setHybridConfig(hybridConfig, this)
         HybridKit.initLynxKit()
+
+        // The debug switches have to come *after* `HybridKit.initLynxKit()`,
+        // which is what runs `LynxEnv.init`. Sparkling 2.0.1 sets them before
+        // that call, where they silently do nothing: `enableLynxDebug` runs
+        // `initDevtoolEnv()` immediately, and that bails because `mContext` and
+        // `mDevToolComponentAttach` are still unset; `setDevtoolEnv` is guarded
+        // by `isNativeLibraryLoaded()`. The flags get recorded, `devtoolEnvInit`
+        // never runs, DebugRouter never starts — so nothing listens on 8901 and
+        // no DevTool client is reachable. This is the order the official
+        // `integrating-lynx-demo-projects` sample uses.
+        if (BuildConfig.DEBUG) {
+            LynxEnv.inst().enableLynxDebug(true)
+            LynxEnv.inst().enableDevtool(true)
+            LynxEnv.inst().enableLogBox(true)
+        }
     }
 
     private fun initSparklingMethods() {

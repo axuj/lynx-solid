@@ -27,6 +27,13 @@ limitations; this file only records the constraints that are easy to break.
 - Keep the launch path: `AppLaunchTheme` paints the starting window, Fresco
   initializes off the main thread, and `release` is debug-signed for
   sideloading only — never ship that signature.
+- Keep the three `LynxEnv` switches (`enableLynxDebug`, `enableDevtool`,
+  `enableLogBox`) **after** `HybridKit.initLynxKit()`, under `BuildConfig.DEBUG`.
+  That call runs `LynxEnv.init`; before it `enableLynxDebug` bails without a
+  context and `setDevtoolEnv` is guarded by `isNativeLibraryLoaded()`. The 2.0.1
+  template sets them before, where they record flags and do nothing — no error,
+  but nothing listens on 8901 and `agent-lynx` finds no client. They are the
+  only debug-only wiring in the shell; release must not carry any of it.
 
 ## Commands
 
@@ -83,3 +90,6 @@ does not double-register it. Removing this pin breaks the build.
   `--ios-dest` flag or CocoaPods files back: they were removed on purpose.
 - Report cold-start numbers from a release build only; debug includes the
   devtool/logbox/debug engine.
+- The 2.1 dev-server path was only verified to "relaunch picks up the new
+  bundle"; the docs' save-triggers-HMR relies on `pluginReactLynx` and is
+  unverified for the Solid plugin. Do not claim hot replace.

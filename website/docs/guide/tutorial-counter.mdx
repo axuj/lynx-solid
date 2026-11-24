@@ -146,16 +146,13 @@ Congratulations! You have successfully created an interactive page! Throughout t
 | Main Thread Script ref | `useMainThreadRef(null)` | `useMainThreadRef(null)` |
 | `'main thread'` directive | `'main thread'` | `'main thread'` |
 
-## Running the Examples
+## Running it in this repository
+
+The tutorial above builds the counter from scratch. The finished version is checked in as `examples/counter`; from the repository root (this repo uses `nub`, the package manager pinned in `package.json`):
 
 ```bash
-# Install dependencies
 nub install
-
-# Build the runtime packages
-nub run build
-
-# Start the dev server
+nub run build            # the runtime packages the example imports
 cd examples/counter && nub run dev
 ```
 
