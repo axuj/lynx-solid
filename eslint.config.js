@@ -153,4 +153,15 @@ export default antfu(
       }],
     },
   },
+  {
+    // Shipped library code: `any` here silences type checking at every call
+    // site and, where it reaches a published .d.ts, hands the erasure to
+    // consumers. Tests opt out above; the dom-expressions fork is ignored
+    // wholesale, so this covers runtime, plugin and compiler src.
+    files: ['packages/**/*.ts', 'packages/**/*.tsx'],
+    name: 'custom/packages-no-explicit-any',
+    rules: {
+      'ts/no-explicit-any': 'error',
+    },
+  },
 )

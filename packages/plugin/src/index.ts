@@ -27,7 +27,7 @@
  *     WebEncodePlugin (@lynx-js/web-core binary web bundle).
  */
 
-import type { RsbuildPlugin, RsbuildPluginAPI } from '@rsbuild/core'
+import type { ModifyBundlerChainFn, RsbuildPlugin, RsbuildPluginAPI } from '@rsbuild/core'
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -175,15 +175,11 @@ function isBootstrapModule(resource: string): boolean {
 }
 
 /**
- * Bundler chain types, extracted from the plugin API surface — @rsbuild/core
- * does not re-export RspackChain, so the chain type is derived from the
- * `modifyBundlerChain` callback instead of imported.
+ * Bundler chain types. @rsbuild/core does not re-export RspackChain, but it
+ * does export the `modifyBundlerChain` callback signature, so the chain type
+ * is derived from that instead of being imported.
  */
-type ModifyBundlerChainCallback = Extract<
-  Parameters<RsbuildPluginAPI['modifyBundlerChain']>[0],
-  (...args: any[]) => any
->
-type BundlerChain = Parameters<ModifyBundlerChainCallback>[0]
+type BundlerChain = Parameters<ModifyBundlerChainFn>[0]
 type BundlerEntryPoint = NonNullable<
   ReturnType<BundlerChain['entryPoints']['entries']>
 >[string]

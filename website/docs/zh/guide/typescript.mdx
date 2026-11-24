@@ -89,7 +89,7 @@ const boxRef = useMainThreadRef<{
 <view main-thread:ref={boxRef} … />
 ```
 
-worklet 事件的类型与后台处理器同源：`main-thread:bindscroll` 系列派生自 `ScrollViewProps` 中对应的 `bind*` 项；触摸与布局处理器（`main-thread:bindtouchstart`、`main-thread:bindlayoutchange`……）接收普通事件对象。遗漏 `'main thread'` 指令的 worklet 处理器依然可以通过类型检查（该指令属于运行时与编译器契约），因此[捕获规则](/zh/guide/main-thread-script)由构建期强制，而非类型系统。
+worklet 事件沿用官方 Lynx 的 worklet 映射：`main-thread:bindtouch*` 的处理器收到 `MainThread.TouchEvent`；`main-thread:bindlayoutchange` 保留官方 `detail`，只把 Android-only 且已 deprecated 的 `params` 标成可选。`main-thread:bindscroll*` 系列因为上游 worklet 映射没覆盖而由本库声明，`target` / `currentTarget` 是 `MainThread.Element`，不是后台的 `Target`；可复用的 handler 可以用 `MainThreadScrollEvent<ScrollEvent>` 注解，类型从 `@lynx-solid/runtime` 导出。遗漏 `'main thread'` 指令的 worklet 处理器依然可以通过类型检查（该指令属于运行时与编译器契约），因此[捕获规则](/zh/guide/main-thread-script)由构建期强制，而非类型系统。
 
 ## 类型检查
 

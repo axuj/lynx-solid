@@ -7,27 +7,27 @@
  * (IntrinsicAttributes), so we extend the same namespace with the lynx
  * intrinsic elements instead of augmenting a package module.
  *
- * Element props come straight from @lynx-js/types; `ElementChildrenAttribute`
- * (`children: {}`) keeps the children prop untyped, mirroring Solid's own.
+ * Element props come straight from the official `IntrinsicElements`; Solid's
+ * `children`/`ref` are added once on `StandardProps`, the same seam ReactLynx
+ * augments, and `ElementChildrenAttribute` (`children: {}`) keeps children
+ * untyped, mirroring Solid's own.
  */
 
 import type {
   BaseEvent,
-  ComponentProps,
-  ImageProps,
+  ContentSizeChangedEvent,
   InputInputEvent,
-  InputProps,
-  ListItemProps,
-  ListProps,
-  NoProps,
-  PageProps,
-  ScrollViewProps,
-  StandardProps,
-  TextAreaProps,
-  TextProps,
-  ViewProps,
+  IntrinsicElements as LynxIntrinsicElements,
+  ScrollEndEvent,
+  ScrollEvent,
+  ScrollToLowerEvent,
+  ScrollToUpperEvent,
 } from '@lynx-js/types'
+import type {
+  LayoutChangeEvent as MainThreadLayoutChangeEvent,
+} from '@lynx-js/types/main-thread'
 import type { MainThreadRef } from './background/main-thread-ref'
+import type { MainThreadScrollEvent } from './internal/main-thread-events'
 
 // `main-thread:ref` lives on every Lynx element; the official types package
 // does not declare it (react-lynx adds it via its own augmentation:
@@ -35,36 +35,46 @@ import type { MainThreadRef } from './background/main-thread-ref'
 // We augment the same seam with our MainThreadRef value type.
 //
 // The official worklet-event mapping (types/main-thread/events.d.ts) derives
-// `main-thread:bind*` keys from LynxEventPropsBase, which omits the scroll
-// family — so `main-thread:bindscroll` & co. are missing. Derive them from
-// the scroll event names with the same handler types as ScrollViewProps'
-// bind* counterparts.
+// `main-thread:bind*` keys from LynxEventPropsBase, so touch handlers already
+// arrive typed. It omits the scroll family — `main-thread:bindscroll` & co.
+// are missing — so those are declared below. Their payloads come from the
+// background ScrollEvent family, whose `target` is the background `Target`;
+// `MainThreadScrollEvent` (exported from the runtime) re-types just
+// target/currentTarget to the live MT element.
+//
+// layoutchange is the one payload re-declared below: its `params` is
+// Android-only and deprecated while `detail` is available everywhere, so the
+// official "both required" shape over-claims `params` on iOS/Harmony/PC. See
+// examples/elk Sheet, which reads `detail?.height ?? params?.height`.
 //
 // Events use the Lynx bind* names exclusively: a lynx event is not a DOM
 // event (different propagation and event object), so DOM-style `on*` aliases
 // are intentionally not declared (and not translated at runtime either).
-type WorkletScrollEventNames
-  = | 'Scroll'
-    | 'ScrollEnd'
-    | 'ScrollToUpper'
-    | 'ScrollToLower'
-    | 'ContentSizeChanged'
+interface WorkletScrollEvents {
+  'main-thread:bindscroll'?: (event: MainThreadScrollEvent<ScrollEvent>) => void
+  'main-thread:bindscrollend'?: (event: MainThreadScrollEvent<ScrollEndEvent>) => void
+  'main-thread:bindscrolltoupper'?: (event: MainThreadScrollEvent<ScrollToUpperEvent>) => void
+  'main-thread:bindscrolltolower'?: (event: MainThreadScrollEvent<ScrollToLowerEvent>) => void
+  'main-thread:bindcontentsizechanged'?: (event: MainThreadScrollEvent<ContentSizeChangedEvent>) => void
+}
 
-type WorkletScrollEvents = {
-  [N in WorkletScrollEventNames as `main-thread:bind${Lowercase<N>}`]?: ScrollViewProps[`bind${Lowercase<N>}`]
+/**
+ * `params` is Android-only and deprecated; every other platform sends only
+ * `detail`, so that is the single member the official type over-claims.
+ */
+type MtLayoutChangeEvent = Omit<MainThreadLayoutChangeEvent, 'params'> & {
+  params?: MainThreadLayoutChangeEvent['params']
 }
 
 declare module '@lynx-js/types' {
   interface StandardProps {
+    // Solid's JSX needs both on the element props. ReactLynx adds the same
+    // pair (children / ref) to StandardProps in its own augmentation; the
+    // official Lynx types alone only describe the engine attributes.
+    'children'?: unknown
+    'ref'?: (el: unknown) => void
     'main-thread:ref'?: MainThreadRef<unknown>
-    // Worklet-bound event namespace beyond the scroll family (Sheet gestures).
-    // Handler payloads are plain event objects; typed loosely to avoid the
-    // minified official event type names.
-    'main-thread:bindtouchstart'?: (event: any) => void
-    'main-thread:bindtouchmove'?: (event: any) => void
-    'main-thread:bindtouchend'?: (event: any) => void
-    'main-thread:bindtouchcancel'?: (event: any) => void
-    'main-thread:bindlayoutchange'?: (event: any) => void
+    'main-thread:bindlayoutchange'?: (event: MtLayoutChangeEvent) => void
   }
   interface ScrollViewProps extends WorkletScrollEvents {}
 
@@ -89,33 +99,9 @@ declare global {
   namespace JSX {
     type Element = import('solid-js').Element
 
-    /**
-     * Allow any children (loose check, same intent as Solid's
-     * `ElementChildrenAttribute`), plus Solid's ref callback seam.
-     */
-    interface SolidLynxChildren {
-      children?: unknown
-      ref?: (el: unknown) => void
-    }
-
-    interface IntrinsicElements {
-      'component': ComponentProps & SolidLynxChildren
-      'image': ImageProps & SolidLynxChildren
-      'inline-image': ImageProps & SolidLynxChildren
-      'inline-text': TextProps & SolidLynxChildren
-      'inline-truncation': NoProps & SolidLynxChildren
-      'list': ListProps & SolidLynxChildren
-      'list-item': ListItemProps & SolidLynxChildren
-      'list-row': StandardProps & SolidLynxChildren
-      'page': PageProps & SolidLynxChildren
-      'scroll-view': ScrollViewProps & SolidLynxChildren
-      'text': TextProps & SolidLynxChildren
-      'view': ViewProps & SolidLynxChildren
-      'svg': StandardProps & { content?: string } & SolidLynxChildren
-      'raw-text': (StandardProps & { text: number | string }) & SolidLynxChildren
-      'input': InputProps & SolidLynxChildren
-      'textarea': TextAreaProps & SolidLynxChildren
-    }
+    // The official list is complete and exported; extending it keeps every
+    // element (and every future one) typed without a hand-copied subset.
+    interface IntrinsicElements extends LynxIntrinsicElements {}
 
     interface ElementChildrenAttribute {
       children: {}

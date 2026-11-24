@@ -1,4 +1,5 @@
 import type { ScrollEvent, ViewProps } from '@lynx-js/types'
+import type { MainThreadScrollEvent } from '@lynx-solid/runtime'
 import { render, useMainThreadRef } from '@lynx-solid/runtime'
 /**
  * Main Thread Script demo — direct port of the official lynx-examples
@@ -55,7 +56,7 @@ function App() {
     setPosStyle({ ...DEFAULT_POS, y: DEFAULT_POS.y - scrollTop })
   }
 
-  const onMtsScroll = (event: ScrollEvent) => {
+  const onMtsScroll = (event: MainThreadScrollEvent<ScrollEvent>) => {
     'main thread'
     const scrollTop = event.detail.scrollTop
     const newPos = { ...DEFAULT_POS, y: DEFAULT_POS.y - scrollTop }
