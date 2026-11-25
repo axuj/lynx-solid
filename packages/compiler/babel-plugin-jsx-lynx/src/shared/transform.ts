@@ -11,7 +11,7 @@ import {
   escapeHTML,
   getConfig
 } from "./utils";
-import { transformSpecialCaseAttributes } from "../lynx-utils";
+import { transformSpecialCaseAttributes, getAttributeNamed } from "../lynx-utils";
 import { DOMWithState } from "@dom-expressions/runtime/src/constants";
 import transformComponent from "./component";
 import transformFragmentChildren from "./fragment";
@@ -301,5 +301,10 @@ export function transformElement(
   }
   const tagName = getTagName(path.node);
   if (isComponent(tagName)) return transformComponent(path);
+  // Upstream bfc236f8 (DOM half): `$key` on an intrinsic element is
+  // SSR/morph entity identity, not an attribute. Lynx has no morph, so drop
+  // it instead of emitting a `$key` prop into the native attribute stream.
+  // Component `$key` is slot occurrence identity and returned above.
+  getAttributeNamed(path, "$key")?.remove();
   return transformElementDOM(path, info);
 }

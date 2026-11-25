@@ -51,7 +51,7 @@
   "peerDependencies": {
     "@rsbuild/core": "catalog:",
     "@rspack/core": "catalog:",
-    "@solidjs/signals": "^2.0.0-rc.22",
+    "@solidjs/signals": "^2.0.3",
     "solid-js": "catalog:"
   },
   "dependencies": {
@@ -67,7 +67,7 @@
   "devDependencies": {
     "@rsbuild/core": "catalog:",
     "@rslib/core": "catalog:",
-    "@solidjs/signals": "^2.0.0-rc.22",
+    "@solidjs/signals": "^2.0.3",
     "solid-js": "catalog:",
     "typescript": "catalog:"
   }
