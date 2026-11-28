@@ -2,7 +2,11 @@ import { PackageManagerTabs } from '@theme'
 
 # Routing (TanStack)
 
-Lynx Solid applications use [`@tanstack/solid-router`](https://tanstack.com/router), the type-safe router for Solid, for navigation between views. Since Lynx has no browser `window.location` or History API, you must use `createMemoryHistory()` — routing state lives entirely in-process.
+Lynx Solid applications use [`@tanstack/solid-router`](https://tanstack.com/router), the type-safe router for Solid, to manage **in-page** navigation (switching views inside one Lynx container). Since Lynx has no browser `window.location` or History API, you must use `createMemoryHistory()` — routing state lives entirely in-process.
+
+:::tip Page-level navigation is not its job
+If a navigation replaces the whole page, that is **page-level navigation** and belongs to the host's navigation stack: one bundle per page. See [Page-level vs in-page](#page-level-vs-in-page) below for where the line sits.
+:::
 
 <Go example="hackernews" defaultFile="src/router.tsx" />
 
@@ -137,6 +141,27 @@ export const Route = createFileRoute('/item/$id')({
 | `createMemoryHistory()` | No | **Yes** |
 
 `createMemoryHistory()` is designed for environments without a browser. Routing state lives in a plain in-memory array, so `router.navigate()`, `router.history.back()` and dynamic params all work.
+
+## Page-level vs in-page
+
+The line is the Lynx container: replacing the whole page is page-level, changing views inside it is in-page.
+
+| | Page-level (host router) | In-page (TanStack, this page) |
+| --- | --- | --- |
+| Unit | one bundle = one page | one bundle = N views |
+| First frame | downloads/parses only this page's code | every route's code is in the same bundle (a Lynx bundle cannot be code-split) |
+| With IFR | works by construction: route params ride in `initData`, first frame is synchronous | structurally at odds: the route resolves after effects, so the main thread has no first screen to paint |
+| Lifetime | container released when the page closes | every view shares one JS context |
+| Transitions/gestures/back | provided by the host | yours to build |
+| Cross-page state | `params` or a host bridge | signals flow directly |
+
+Three rules:
+
+1. **Page-level always goes to the host.** Pass data through `options.params`; don't stuff the whole app into one bundle to save a container launch — you pay it back in first frame, bundle size and memory.
+2. **In-page is where TanStack belongs.** Tabs, subviews, and the web preview (same code has to run in a browser) all need it.
+3. **They stack.** The host owns pages; hang a TanStack router inside a page for its subviews. Each layer stays on its side.
+
+`apps/sparkling-app` in this repo is page-level: `main` and `second` are two entries producing two bundles, navigation goes through `sparkling-navigation`'s `navigate({ path: 'second.lynx.bundle', options: { params } })` / `close()`, backed on the native side by Sparkling's `RouterOpenMethod` / `RouterCloseMethod`.
 
 ## Examples
 

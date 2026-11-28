@@ -2,7 +2,11 @@ import { PackageManagerTabs } from '@theme'
 
 # 路由（TanStack）
 
-Lynx Solid 应用用 Solid 的类型安全路由 [`@tanstack/solid-router`](https://tanstack.com/router) 管理屏间导航。Lynx 没有浏览器 `window.location` 和 History API，所以必须用 `createMemoryHistory()`——路由状态完全活在进程里。
+Lynx Solid 应用用 Solid 的类型安全路由 [`@tanstack/solid-router`](https://tanstack.com/router) 管理**页内**导航（一个 Lynx 容器里切换视图）。Lynx 没有浏览器 `window.location` 和 History API，所以必须用 `createMemoryHistory()`——路由状态完全活在进程里。
+
+:::tip 页面级导航不归它管
+一次跳转如果换掉整个页面，那是**页面级导航**，交给宿主的导航栈：一页一个 bundle。两者的分界与取舍见下方[页面级 vs 页内](#页面级-vs-页内)。
+:::
 
 <Go example="hackernews" defaultFile="src/router.tsx" />
 
@@ -136,6 +140,27 @@ export const Route = createFileRoute('/item/$id')({
 | `createMemoryHistory()` | 否 | **是** |
 
 `createMemoryHistory()` 专为没有浏览器的环境设计。路由状态存储在一个简单的内存数组中，因此 `router.navigate()`、`router.history.back()` 和动态参数等功能都能正常工作。
+
+## 页面级 vs 页内
+
+分界线是 Lynx 容器：换掉整个页面 = 页面级，容器内的视图变化 = 页内。
+
+| | 页面级（宿主路由） | 页内（本文的 TanStack） |
+| --- | --- | --- |
+| 单位 | 一个 bundle = 一个页面 | 一个 bundle = N 个视图 |
+| 首屏 | 只下载/解析本页代码 | 全部路由代码都在同一个包里（Lynx bundle 不能 code split） |
+| 与 IFR | 天然兼容：路由参数在 `initData` 里，首帧同步 | 结构性冲突：路由结果在 effect 之后才出现，主线程画不出首屏 |
+| 生命周期 | 关页即释放容器 | 所有视图活在同一个 JS 上下文 |
+| 转场/手势/返回键 | 宿主提供 | 自己做 |
+| 跨屏状态 | `params` 或宿主 bridge | signal 直通 |
+
+三条规则：
+
+1. **页面级一律交给宿主。** 传参走 `options.params`，别为了省一次容器启动把整个应用塞进一个 bundle——首屏、包体、内存三项会一起付。
+2. **页内才用 TanStack。** tab、子视图、以及 web 预览（同一份代码要在浏览器里跑）都归它。
+3. **两者可以叠。** 宿主管页面，页面内再挂一个 TanStack 管子视图，两层各管一层。
+
+仓库里的 `apps/sparkling-app` 就是页面级：`main` / `second` 两个 entry 出两个 bundle，跳转走 `sparkling-navigation` 的 `navigate({ path: 'second.lynx.bundle', options: { params } })` / `close()`，原生侧接 Sparkling 的 `RouterOpenMethod` / `RouterCloseMethod`。
 
 ## 案例
 
